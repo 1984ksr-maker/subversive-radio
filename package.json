@@ -1,0 +1,70 @@
+{
+  "name": "subversive-radio",
+  "version": "1.0.0",
+  "description": "Live broadcasting desktop app with web listener and short transmissions",
+  "main": "main.js",
+  "scripts": {
+    "start": "node server.js",
+    "electron": "electron .",
+    "dev": "concurrently \"node server.js\" \"sleep 2 && electron .\"",
+    "build": "electron-builder --mac --x64 --arm64",
+    "build-dmg": "electron-builder --mac dmg --arm64",
+    "build-win": "electron-builder --win",
+    "build-linux": "electron-builder --linux"
+  },
+  "build": {
+    "appId": "com.subversive.radio",
+    "productName": "Subversive Radio",
+    "mac": {
+      "category": "public.app-category.music",
+      "icon": "assets/icon.icns",
+      "entitlements": "entitlements.mac.plist",
+      "entitlementsInherit": "entitlements.mac.plist",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["arm64"]
+        }
+      ],
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Subversive Radio needs microphone access to broadcast live audio.",
+        "NSCameraUsageDescription": "Subversive Radio may use the camera for video broadcasting."
+      }
+    },
+    "dmg": {
+      "title": "Subversive Radio",
+      "contents": [
+        { "x": 130, "y": 220 },
+        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+      ]
+    },
+    "win": {
+      "icon": "assets/icon.ico",
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": true,
+      "installerIcon": "assets/icon.ico"
+    },
+    "files": [
+      "**/*",
+      "!node_modules/.cache",
+      "!dist",
+      "!.git",
+      "!Dockerfile",
+      "!render.yaml",
+      "!.dockerignore"
+    ]
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2",
+    "socket.io-client": "^4.7.2",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1",
+    "concurrently": "^8.2.2"
+  }
+}

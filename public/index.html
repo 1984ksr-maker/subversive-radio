@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Subversive Radio — Tune In</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --red: #ff2d2d;
+      --red-glow: rgba(255, 45, 45, 0.4);
+      --green: #00ff88;
+      --amber: #ffaa00;
+      --bg: #0a0a0a;
+      --surface: #141414;
+      --surface2: #1e1e1e;
+      --text: #e0e0e0;
+      --text-dim: #666;
+    }
+
+    body {
+      font-family: 'SF Mono', 'Fira Code', 'Courier New', monospace;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    .noise-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      opacity: 0.03;
+      pointer-events: none;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+      background-size: 256px;
+    }
+
+    .scanlines {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      pointer-events: none;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0, 0, 0, 0.05) 2px,
+        rgba(0, 0, 0, 0.05) 4px
+      );
+    }
+
+    .radio {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 500px;
+      padding: 20px;
+    }
+
+    .radio-body {
+      background: var(--surface);
+      border: 1px solid #222;
+      border-radius: 16px;
+      padding: 40px 32px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 24px;
+    }
+
+    .station-badge {
+      padding: 6px 16px;
+      border: 1px solid #333;
+      border-radius: 20px;
+      font-size: 10px;
+      letter-spacing: 3px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      transition: all 0.5s;
+    }
+
+    .station-badge.live {
+      border-color: var(--red);
+      color: var(--red);
+      box-shadow: 0 0 15px var(--red-glow);
+      animation: pulse 2s infinite;
+    }
+
+    .station-badge.connected {
+      border-color: var(--green);
+      color: var(--green);
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    .station-name {
+      font-size: 22px;
+      font-weight: bold;
+      letter-spacing: 6px;
+      text-transform: uppercase;
+      text-align: center;
+      color: var(--red);
+      line-height: 1.4;
+    }
+
+    .station-tagline {
+      font-size: 12px;
+      color: var(--text-dim);
+      letter-spacing: 2px;
+      text-align: center;
+    }
+
+    .player-area {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .visualizer-ring {
+      width: 220px;
+      height: 220px;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #ringCanvas {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    .tune-in-btn {
+      width: 130px;
+      height: 130px;
+      border-radius: 50%;
+      border: 2px solid #333;
+      background: var(--surface2);
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: bold;
+      letter-spacing: 2px;
+      cursor: pointer;
+      transition: all 0.3s;
+      text-transform: uppercase;
+      z-index: 1;
+      line-height: 1.6;
+    }
+
+    .tune-in-btn:hover {
+      border-color: var(--red);
+      color: var(--red);
+      box-shadow: 0 0 30px var(--red-glow);
+    }
+
+    .tune-in-btn.listening {
+      border-color: var(--red);
+      background: var(--red);
+      color: #fff;
+      box-shadow: 0 0 40px var(--red-glow);
+      animation: pulse 2s infinite;
+    }
+
+    .tune-in-btn.listening:hover {
+      background: #dd2222;
+    }
+
+    .transmission-banner {
+      width: 100%;
+      padding: 14px 18px;
+      background: var(--surface2);
+      border: 1px solid var(--amber);
+      border-radius: 8px;
+      text-align: center;
+      display: none;
+      animation: fadeIn 0.3s;
+    }
+
+    .transmission-banner.active { display: block; }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .transmission-banner .label {
+      font-size: 10px;
+      letter-spacing: 2px;
+      color: var(--amber);
+      margin-bottom: 6px;
+    }
+
+    .transmission-banner .title {
+      font-size: 14px;
+      font-weight: bold;
+      color: var(--text);
+    }
+
+    .transmission-progress {
+      width: 100%;
+      height: 3px;
+      background: #333;
+      border-radius: 2px;
+      margin-top: 8px;
+      overflow: hidden;
+    }
+
+    .transmission-progress-bar {
+      height: 100%;
+      background: var(--amber);
+      border-radius: 2px;
+      width: 0%;
+      transition: width 0.3s linear;
+    }
+
+    .volume-bar {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .volume-bar label {
+      font-size: 10px;
+      letter-spacing: 2px;
+      color: var(--text-dim);
+      min-width: 30px;
+    }
+
+    .volume-bar .vol-value {
+      font-size: 10px;
+      color: var(--text-dim);
+      min-width: 30px;
+      text-align: right;
+    }
+
+    input[type="range"] {
+      flex: 1;
+      -webkit-appearance: none;
+      height: 3px;
+      background: #333;
+      border-radius: 2px;
+      outline: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--red);
+      cursor: pointer;
+      transition: transform 0.1s;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+
+    .status-bar {
+      display: flex;
+      justify-content: space-between;
+      width: 100%;
+      font-size: 10px;
+      color: var(--text-dim);
+      letter-spacing: 1px;
+    }
+
+    .status-bar .status-left {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .status-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: #333;
+      display: inline-block;
+    }
+
+    .status-dot.connected { background: var(--green); }
+    .status-dot.live { background: var(--red); animation: pulse 1.5s infinite; }
+    .status-dot.error { background: var(--amber); }
+
+    .connection-error {
+      width: 100%;
+      padding: 14px 18px;
+      background: var(--surface2);
+      border: 1px solid #ff4444;
+      border-radius: 8px;
+      text-align: center;
+      display: none;
+      font-size: 12px;
+      color: #ff6666;
+      line-height: 1.6;
+    }
+
+    .connection-error.active { display: block; }
+
+    .connection-error button {
+      margin-top: 10px;
+      padding: 8px 20px;
+      border: 1px solid #ff4444;
+      border-radius: 4px;
+      background: transparent;
+      color: #ff6666;
+      font-family: inherit;
+      font-size: 11px;
+      cursor: pointer;
+      letter-spacing: 1px;
+    }
+
+    .connection-error button:hover {
+      background: #ff4444;
+      color: #fff;
+    }
+
+    .listeners-count {
+      font-size: 10px;
+      color: var(--text-dim);
+      letter-spacing: 1px;
+    }
+
+    .listeners-count span { color: var(--green); }
+
+    @media (max-width: 520px) {
+      .radio { padding: 10px; }
+      .radio-body { padding: 28px 20px; }
+      .station-name { font-size: 18px; letter-spacing: 4px; }
+      .visualizer-ring { width: 180px; height: 180px; }
+      .tune-in-btn { width: 110px; height: 110px; font-size: 10px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="noise-overlay"></div>
+  <div class="scanlines"></div>
+
+  <div class="radio">
+    <div class="radio-body">
+      <div class="station-badge" id="badge">CONNECTING</div>
+      <div class="station-name" id="stationName">SUBVERSIVE RADIO</div>
+      <div class="station-tagline" id="stationTagline">Broadcasting from the underground</div>
+
+      <div class="connection-error" id="connectionError">
+        Cannot connect to the station.<br>
+        The broadcaster may be offline.
+        <br><button onclick="retryConnection()">RETRY</button>
+      </div>
+
+      <div class="player-area" id="playerArea">
+        <div class="visualizer-ring">
+          <canvas id="ringCanvas"></canvas>
+          <button class="tune-in-btn" id="tuneInBtn" onclick="toggleListen()">TUNE IN</button>
+        </div>
+
+        <div class="transmission-banner" id="transmissionBanner">
+          <div class="label">INCOMING TRANSMISSION</div>
+          <div class="title" id="transmissionTitle">—</div>
+          <div class="transmission-progress">
+            <div class="transmission-progress-bar" id="transmissionProgress"></div>
+          </div>
+        </div>
+
+        <div class="volume-bar">
+          <label>VOL</label>
+          <input type="range" id="volume" min="0" max="1" step="0.01" value="0.8" oninput="updateVolume(this.value)">
+          <span class="vol-value" id="volValue">80%</span>
+        </div>
+      </div>
+
+      <div class="status-bar">
+        <div class="status-left">
+          <div class="status-dot" id="statusDot"></div>
+          <span id="statusText">Connecting...</span>
+        </div>
+        <span id="timeDisplay">—</span>
+      </div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    let socket;
+    let audioContext;
+    let gainNode;
+    let isListening = false;
+    let analyser;
+    let reconnectAttempts = 0;
+    let currentTransmissionAudio = null;
+
+    // Audio buffer queue for smooth playback
+    let nextPlayTime = 0;
+    const BUFFER_AHEAD = 0.15;  // 150ms buffer to absorb network jitter
+    let bufferHealth = 0;
+
+    function connectSocket() {
+      const serverUrl = window.location.origin;
+      socket = io(serverUrl, {
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        reconnectionAttempts: 20,
+        transports: ['websocket', 'polling']
+      });
+
+      socket.on('connect', () => {
+        reconnectAttempts = 0;
+        socket.emit('join-listener');
+        document.getElementById('statusDot').className = 'status-dot connected';
+        document.getElementById('statusText').textContent = 'Connected — waiting for broadcast';
+        document.getElementById('badge').textContent = 'CONNECTED';
+        document.getElementById('badge').className = 'station-badge connected';
+        document.getElementById('connectionError').classList.remove('active');
+        document.getElementById('playerArea').style.display = 'flex';
+      });
+
+      socket.on('disconnect', () => {
+        document.getElementById('statusDot').className = 'status-dot';
+        document.getElementById('statusText').textContent = 'Disconnected — reconnecting...';
+        document.getElementById('badge').textContent = 'OFFLINE';
+        document.getElementById('badge').className = 'station-badge';
+      });
+
+      socket.on('connect_error', (err) => {
+        reconnectAttempts++;
+        document.getElementById('statusDot').className = 'status-dot error';
+        document.getElementById('statusText').textContent = `Connection failed (attempt ${reconnectAttempts})`;
+        if (reconnectAttempts >= 5) {
+          document.getElementById('connectionError').classList.add('active');
+        }
+      });
+
+      socket.on('station-info', (info) => {
+        document.getElementById('stationName').textContent = info.name || 'SUBVERSIVE RADIO';
+        document.getElementById('stationTagline').textContent = info.tagline || 'Broadcasting from the underground';
+        document.title = `${info.name || 'Subversive Radio'} — Tune In`;
+        if (info.isLive) {
+          setLiveState();
+        }
+      });
+
+      socket.on('station-live', (info) => {
+        if (info.name) document.getElementById('stationName').textContent = info.name;
+        if (info.tagline) document.getElementById('stationTagline').textContent = info.tagline;
+        setLiveState();
+      });
+
+      socket.on('station-offline', () => {
+        document.getElementById('badge').textContent = 'OFF AIR';
+        document.getElementById('badge').className = 'station-badge';
+        document.getElementById('statusDot').className = 'status-dot connected';
+        document.getElementById('statusText').textContent = 'Station went off air';
+
+        if (isListening) {
+          const btn = document.getElementById('tuneInBtn');
+          btn.textContent = 'TUNE IN';
+          btn.classList.remove('listening');
+          isListening = false;
+        }
+      });
+
+      socket.on('audio-stream', (data) => {
+        if (!isListening || !audioContext) return;
+        playAudioChunk(data);
+      });
+
+      socket.on('transmission-start', (data) => {
+        const banner = document.getElementById('transmissionBanner');
+        banner.classList.add('active');
+        document.getElementById('transmissionTitle').textContent = data.title;
+        document.getElementById('transmissionProgress').style.width = '0%';
+
+        if (!audioContext) initAudio();
+        if (audioContext.state === 'suspended') audioContext.resume();
+
+        if (currentTransmissionAudio) {
+          currentTransmissionAudio.pause();
+          currentTransmissionAudio = null;
+        }
+
+        const audio = new Audio(data.audioData);
+        currentTransmissionAudio = audio;
+        audio.volume = document.getElementById('volume').value;
+        audio.play().catch((e) => {
+          document.getElementById('transmissionTitle').textContent = data.title + ' (tap to play)';
+          banner.onclick = () => {
+            audio.play();
+            banner.onclick = null;
+            document.getElementById('transmissionTitle').textContent = data.title;
+          };
+        });
+
+        audio.ontimeupdate = () => {
+          if (audio.duration) {
+            const pct = (audio.currentTime / audio.duration) * 100;
+            document.getElementById('transmissionProgress').style.width = pct + '%';
+          }
+        };
+
+        audio.onended = () => {
+          banner.classList.remove('active');
+          currentTransmissionAudio = null;
+        };
+      });
+
+      socket.on('transmission-end', () => {
+        document.getElementById('transmissionBanner').classList.remove('active');
+        if (currentTransmissionAudio) {
+          currentTransmissionAudio.pause();
+          currentTransmissionAudio = null;
+        }
+      });
+    }
+
+    function setLiveState() {
+      document.getElementById('badge').textContent = 'ON AIR';
+      document.getElementById('badge').className = 'station-badge live';
+      document.getElementById('statusDot').className = 'status-dot live';
+      document.getElementById('statusText').textContent = 'Station is live — hit TUNE IN';
+    }
+
+    function retryConnection() {
+      reconnectAttempts = 0;
+      document.getElementById('connectionError').classList.remove('active');
+      document.getElementById('statusText').textContent = 'Retrying...';
+      if (socket) socket.close();
+      setTimeout(connectSocket, 500);
+    }
+
+    function initAudio() {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 44100 });
+      gainNode = audioContext.createGain();
+      gainNode.gain.value = parseFloat(document.getElementById('volume').value);
+      analyser = audioContext.createAnalyser();
+      analyser.fftSize = 256;
+      gainNode.connect(analyser);
+      analyser.connect(audioContext.destination);
+      nextPlayTime = 0;
+      drawRing();
+    }
+
+    function playAudioChunk(arrayBuffer) {
+      try {
+        const int16 = new Int16Array(arrayBuffer);
+        const float32 = new Float32Array(int16.length);
+        for (let i = 0; i < int16.length; i++) {
+          float32[i] = int16[i] / 32768;
+        }
+
+        const buffer = audioContext.createBuffer(1, float32.length, 44100);
+        buffer.getChannelData(0).set(float32);
+        const duration = buffer.duration;
+
+        const now = audioContext.currentTime;
+
+        // If we've fallen behind or this is the first chunk, reset the schedule
+        if (nextPlayTime < now) {
+          nextPlayTime = now + BUFFER_AHEAD;
+        }
+
+        const source = audioContext.createBufferSource();
+        source.buffer = buffer;
+        source.connect(gainNode);
+        source.start(nextPlayTime);
+
+        // Schedule the next chunk right after this one ends (gapless)
+        nextPlayTime += duration;
+
+        // Track buffer health for status display
+        bufferHealth = nextPlayTime - now;
+      } catch (e) {}
+    }
+
+    function toggleListen() {
+      const btn = document.getElementById('tuneInBtn');
+
+      if (!isListening) {
+        if (!audioContext) initAudio();
+        if (audioContext.state === 'suspended') audioContext.resume();
+        isListening = true;
+        nextPlayTime = 0;
+        btn.textContent = 'LISTENING';
+        btn.classList.add('listening');
+        document.getElementById('statusText').textContent = 'Buffering...';
+        setTimeout(() => {
+          if (isListening) document.getElementById('statusText').textContent = 'Tuned in — receiving broadcast';
+        }, 500);
+      } else {
+        isListening = false;
+        nextPlayTime = 0;
+        btn.textContent = 'TUNE IN';
+        btn.classList.remove('listening');
+        document.getElementById('statusText').textContent = 'Paused';
+      }
+    }
+
+    function updateVolume(val) {
+      document.getElementById('volValue').textContent = Math.round(val * 100) + '%';
+      if (gainNode) gainNode.gain.value = parseFloat(val);
+      if (currentTransmissionAudio) currentTransmissionAudio.volume = parseFloat(val);
+    }
+
+    function drawRing() {
+      const canvas = document.getElementById('ringCanvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = 440;
+      canvas.height = 440;
+      const cx = canvas.width / 2;
+      const cy = canvas.height / 2;
+      const radius = 140;
+      const bars = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bars);
+
+      function draw() {
+        requestAnimationFrame(draw);
+        analyser.getByteFrequencyData(dataArray);
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        for (let i = 0; i < bars; i++) {
+          const angle = (i / bars) * Math.PI * 2 - Math.PI / 2;
+          const val = dataArray[i] / 255;
+          const barHeight = val * 55;
+          const x1 = cx + Math.cos(angle) * radius;
+          const y1 = cy + Math.sin(angle) * radius;
+          const x2 = cx + Math.cos(angle) * (radius + barHeight);
+          const y2 = cy + Math.sin(angle) * (radius + barHeight);
+
+          ctx.beginPath();
+          ctx.moveTo(x1, y1);
+          ctx.lineTo(x2, y2);
+          ctx.strokeStyle = `rgba(255, 45, 45, ${0.3 + val * 0.7})`;
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(255, 45, 45, 0.12)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+      draw();
+    }
+
+    setInterval(() => {
+      const now = new Date();
+      document.getElementById('timeDisplay').textContent =
+        now.toLocaleTimeString('en-US', { hour12: false });
+    }, 1000);
+
+    // Idle ring animation before audio is initialized
+    (function drawIdleRing() {
+      const canvas = document.getElementById('ringCanvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      canvas.width = 440;
+      canvas.height = 440;
+      const cx = 220, cy = 220, r = 140;
+      let angle = 0;
+
+      function draw() {
+        if (analyser) return;
+        requestAnimationFrame(draw);
+        ctx.clearRect(0, 0, 440, 440);
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(255, 45, 45, 0.08)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // Rotating glow dot
+        angle += 0.02;
+        const dx = cx + Math.cos(angle) * r;
+        const dy = cy + Math.sin(angle) * r;
+        ctx.beginPath();
+        ctx.arc(dx, dy, 4, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255, 45, 45, 0.4)';
+        ctx.fill();
+
+        const gradient = ctx.createRadialGradient(dx, dy, 0, dx, dy, 20);
+        gradient.addColorStop(0, 'rgba(255, 45, 45, 0.2)');
+        gradient.addColorStop(1, 'rgba(255, 45, 45, 0)');
+        ctx.beginPath();
+        ctx.arc(dx, dy, 20, 0, Math.PI * 2);
+        ctx.fillStyle = gradient;
+        ctx.fill();
+      }
+      draw();
+    })();
+
+    // Start connection
+    connectSocket();
+  </script>
+</body>
+</html>

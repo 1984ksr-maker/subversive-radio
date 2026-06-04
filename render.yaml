@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: subversive-radio
+    runtime: node
+    plan: free
+    buildCommand: npm install --production
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+    healthCheckPath: /health
