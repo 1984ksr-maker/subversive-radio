@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Subversive Radio — Download</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --red: #ff2d2d;
+      --red-glow: rgba(255, 45, 45, 0.4);
+      --green: #00ff88;
+      --bg: #0a0a0a;
+      --surface: #141414;
+      --surface2: #1e1e1e;
+      --text: #e0e0e0;
+      --text-dim: #666;
+    }
+    body {
+      font-family: 'SF Mono', 'Fira Code', 'Courier New', monospace;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .page {
+      width: 100%;
+      max-width: 560px;
+      padding: 20px;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid #222;
+      border-radius: 16px;
+      padding: 48px 36px;
+      text-align: center;
+    }
+    .logo {
+      font-size: 28px;
+      font-weight: bold;
+      letter-spacing: 6px;
+      text-transform: uppercase;
+      color: var(--red);
+      margin-bottom: 8px;
+    }
+    .tagline {
+      font-size: 12px;
+      color: var(--text-dim);
+      letter-spacing: 2px;
+      margin-bottom: 40px;
+    }
+    .version {
+      display: inline-block;
+      padding: 4px 12px;
+      border: 1px solid #333;
+      border-radius: 12px;
+      font-size: 10px;
+      color: var(--text-dim);
+      letter-spacing: 1px;
+      margin-bottom: 32px;
+    }
+    .downloads {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 32px;
+    }
+    .download-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 16px 24px;
+      border: 1px solid #333;
+      border-radius: 8px;
+      background: var(--surface2);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 13px;
+      letter-spacing: 1px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+    .download-btn:hover {
+      border-color: var(--red);
+      background: #1a1a1a;
+      box-shadow: 0 0 20px var(--red-glow);
+    }
+    .download-btn .icon { font-size: 20px; }
+    .download-btn .info {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 2px;
+    }
+    .download-btn .info .platform {
+      font-weight: bold;
+      font-size: 14px;
+    }
+    .download-btn .info .detail {
+      font-size: 10px;
+      color: var(--text-dim);
+    }
+    .download-btn.primary {
+      border-color: var(--red);
+      background: rgba(255, 45, 45, 0.1);
+    }
+    .separator {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin: 28px 0;
+      color: var(--text-dim);
+      font-size: 10px;
+      letter-spacing: 2px;
+    }
+    .separator::before, .separator::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: #222;
+    }
+    .web-option {
+      padding: 20px;
+      border: 1px solid #222;
+      border-radius: 8px;
+      background: var(--surface2);
+    }
+    .web-option h3 {
+      font-size: 12px;
+      letter-spacing: 2px;
+      color: var(--green);
+      margin-bottom: 8px;
+    }
+    .web-option p {
+      font-size: 11px;
+      color: var(--text-dim);
+      line-height: 1.6;
+      margin-bottom: 12px;
+    }
+    .web-links {
+      display: flex;
+      gap: 8px;
+    }
+    .web-link {
+      flex: 1;
+      padding: 10px;
+      border: 1px solid #333;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 11px;
+      text-decoration: none;
+      text-align: center;
+      transition: all 0.2s;
+      letter-spacing: 1px;
+    }
+    .web-link:hover {
+      border-color: var(--green);
+      color: var(--green);
+    }
+    .footer-note {
+      margin-top: 24px;
+      font-size: 10px;
+      color: var(--text-dim);
+      line-height: 1.6;
+    }
+    @media (max-width: 480px) {
+      .card { padding: 32px 20px; }
+      .logo { font-size: 22px; letter-spacing: 4px; }
+      .web-links { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="card">
+      <div class="logo">Subversive Radio</div>
+      <div class="tagline">Broadcasting from the underground</div>
+      <div class="version">v1.0.0</div>
+
+      <div class="downloads">
+        <a class="download-btn primary" href="/download/mac">
+          <span class="icon">🍎</span>
+          <span class="info">
+            <span class="platform">Download for Mac</span>
+            <span class="detail">macOS (Apple Silicon) • DMG Installer • ~180 MB</span>
+          </span>
+        </a>
+      </div>
+
+      <div class="separator">OR USE IN BROWSER</div>
+
+      <div class="web-option">
+        <h3>No install needed</h3>
+        <p>Open the broadcaster or listener directly in your browser. Works on any device — Mac, Windows, Linux, phone.</p>
+        <div class="web-links">
+          <a class="web-link" href="/broadcaster">BROADCAST</a>
+          <a class="web-link" href="/">LISTEN</a>
+        </div>
+      </div>
+
+      <div class="footer-note">
+        Open source • No account needed • Encrypted tunnel<br>
+        After installing, open the app — it starts the server and<br>
+        generates a random broadcast link automatically.
+      </div>
+    </div>
+  </div>
+</body>
+</html>

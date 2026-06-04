@@ -382,8 +382,8 @@
 
         <div class="volume-bar">
           <label>VOL</label>
-          <input type="range" id="volume" min="0" max="1" step="0.01" value="0.8" oninput="updateVolume(this.value)">
-          <span class="vol-value" id="volValue">80%</span>
+          <input type="range" id="volume" min="0" max="4" step="0.05" value="2" oninput="updateVolume(this.value)">
+          <span class="vol-value" id="volValue">+6 dB</span>
         </div>
       </div>
 
@@ -550,9 +550,19 @@
       audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 44100 });
       gainNode = audioContext.createGain();
       gainNode.gain.value = parseFloat(document.getElementById('volume').value);
+
+      // Limiter on listener side too — prevent speaker damage from boost
+      const listenerLimiter = audioContext.createDynamicsCompressor();
+      listenerLimiter.threshold.value = -1;
+      listenerLimiter.ratio.value = 20;
+      listenerLimiter.attack.value = 0.001;
+      listenerLimiter.release.value = 0.05;
+      listenerLimiter.knee.value = 0;
+
       analyser = audioContext.createAnalyser();
       analyser.fftSize = 256;
-      gainNode.connect(analyser);
+      gainNode.connect(listenerLimiter);
+      listenerLimiter.connect(analyser);
       analyser.connect(audioContext.destination);
       nextPlayTime = 0;
       drawRing();
@@ -614,9 +624,11 @@
     }
 
     function updateVolume(val) {
-      document.getElementById('volValue').textContent = Math.round(val * 100) + '%';
-      if (gainNode) gainNode.gain.value = parseFloat(val);
-      if (currentTransmissionAudio) currentTransmissionAudio.volume = parseFloat(val);
+      val = parseFloat(val);
+      const db = val > 0 ? (20 * Math.log10(val)).toFixed(0) : '-∞';
+      document.getElementById('volValue').textContent = (db > 0 ? '+' : '') + db + ' dB';
+      if (gainNode) gainNode.gain.value = val;
+      if (currentTransmissionAudio) currentTransmissionAudio.volume = Math.min(val, 1);
     }
 
     function drawRing() {

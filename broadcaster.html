@@ -849,12 +849,12 @@
           <div class="control-group">
             <div class="control-row">
               <label>Input Gain</label>
-              <input type="range" id="inputGain" min="0" max="3" step="0.01" value="1" oninput="updateGain()">
-              <span class="value" id="inputGainVal">0 dB</span>
+              <input type="range" id="inputGain" min="-12" max="24" step="0.5" value="6" oninput="updateGain()">
+              <span class="value" id="inputGainVal">+6 dB</span>
             </div>
             <div class="control-row">
               <label>Output</label>
-              <input type="range" id="outputLevel" min="0" max="2" step="0.01" value="1" oninput="updateOutput()">
+              <input type="range" id="outputLevel" min="-24" max="12" step="0.5" value="0" oninput="updateOutput()">
               <span class="value" id="outputLevelVal">0 dB</span>
             </div>
             <div class="control-row">
@@ -925,6 +925,13 @@
                 <label>Release</label>
                 <input type="range" class="comp-slider" id="compRelease" min="0.01" max="1" step="0.01" value="0.25" oninput="updateComp()">
                 <span class="value" id="compReleaseVal">250 ms</span>
+              </div>
+            </div>
+            <div class="control-group" style="margin-top:6px">
+              <div class="control-row">
+                <label>Makeup</label>
+                <input type="range" class="comp-slider" id="makeupGain" min="0" max="24" step="0.5" value="6" oninput="updateMakeup()">
+                <span class="value" id="makeupGainVal">+6 dB</span>
               </div>
             </div>
             <h2 style="margin-top:14px">Noise Gate <button class="toggle-btn" id="gateToggle" onclick="toggleGate()">OFF</button></h2>
@@ -1018,7 +1025,7 @@
 
     let isLive = false;
     let audioContext, mediaStream, sourceNode, analyserNode, gainNode, processorNode;
-    let outputGainNode, monitorGainNode;
+    let outputGainNode, monitorGainNode, makeupGainNode, limiterNode, highPassFilter;
     let recordDestination;
     let eqLowFilter, eqLowMidFilter, eqHighMidFilter, eqHighFilter;
     let compressorNode;
@@ -1038,6 +1045,11 @@
     let currentSampleRate = 44100;
     let currentBitDepth = 16;
     let currentBufferSize = 4096;
+
+    // Convert dB to linear gain
+    function dbToGain(db) { return Math.pow(10, db / 20); }
+    // Convert linear gain to dB
+    function gainToDb(gain) { return gain > 0 ? 20 * Math.log10(gain) : -Infinity; }
 
     // Socket events
     socket.on('connect', () => {
@@ -1101,7 +1113,8 @@
       } catch (e) {}
     }
 
-    // AUDIO INIT
+    // AUDIO INIT — proper gain staging:
+    // mic → highPass → inputGain → [EQ] → [compressor → makeupGain] → limiter → outputGain → analyser/stream
     async function initAudio() {
       if (audioInitialized) return;
 
@@ -1116,9 +1129,15 @@
 
         sourceNode = audioContext.createMediaStreamSource(mediaStream);
 
-        // Input gain
+        // High-pass filter — cut rumble below 80Hz
+        highPassFilter = audioContext.createBiquadFilter();
+        highPassFilter.type = 'highpass';
+        highPassFilter.frequency.value = 80;
+        highPassFilter.Q.value = 0.7;
+
+        // Input gain — dB slider mapped to linear
         gainNode = audioContext.createGain();
-        gainNode.gain.value = parseFloat(document.getElementById('inputGain').value);
+        gainNode.gain.value = dbToGain(parseFloat(document.getElementById('inputGain').value));
 
         // EQ filters
         eqLowFilter = audioContext.createBiquadFilter();
@@ -1145,15 +1164,27 @@
 
         // Compressor
         compressorNode = audioContext.createDynamicsCompressor();
-        compressorNode.threshold.value = -24;
-        compressorNode.ratio.value = 4;
-        compressorNode.attack.value = 0.003;
-        compressorNode.release.value = 0.25;
+        compressorNode.threshold.value = parseFloat(document.getElementById('compThreshold').value);
+        compressorNode.ratio.value = parseFloat(document.getElementById('compRatio').value);
+        compressorNode.attack.value = parseFloat(document.getElementById('compAttack').value);
+        compressorNode.release.value = parseFloat(document.getElementById('compRelease').value);
         compressorNode.knee.value = 6;
+
+        // Makeup gain after compressor
+        makeupGainNode = audioContext.createGain();
+        makeupGainNode.gain.value = dbToGain(parseFloat(document.getElementById('makeupGain').value));
+
+        // Limiter — prevents clipping, always on
+        limiterNode = audioContext.createDynamicsCompressor();
+        limiterNode.threshold.value = -1;
+        limiterNode.ratio.value = 20;
+        limiterNode.attack.value = 0.001;
+        limiterNode.release.value = 0.05;
+        limiterNode.knee.value = 0;
 
         // Output gain
         outputGainNode = audioContext.createGain();
-        outputGainNode.gain.value = parseFloat(document.getElementById('outputLevel').value);
+        outputGainNode.gain.value = dbToGain(parseFloat(document.getElementById('outputLevel').value));
 
         // Analyser
         analyserNode = audioContext.createAnalyser();
@@ -1161,13 +1192,14 @@
 
         // Monitor (headphone feedback)
         monitorGainNode = audioContext.createGain();
-        monitorGainNode.gain.value = 0;
+        monitorGainNode.gain.value = parseFloat(document.getElementById('monitorLevel').value);
 
-        // Recording destination — captures processed audio for transmissions
+        // Recording destination
         recordDestination = audioContext.createMediaStreamDestination();
 
-        // Build chain
-        sourceNode.connect(gainNode);
+        // Build chain: source → highPass → gainNode → [EQ] → [comp → makeup] → limiter → output
+        sourceNode.connect(highPassFilter);
+        highPassFilter.connect(gainNode);
         rebuildChain();
 
         // Monitor output (silent by default)
@@ -1182,7 +1214,7 @@
         processorNode = audioContext.createScriptProcessor(currentBufferSize, 1, 1);
         outputGainNode.connect(processorNode);
 
-        // Connect to a silent destination to keep the processor alive
+        // Keep processor alive via silent output
         const silentGain = audioContext.createGain();
         silentGain.gain.value = 0;
         processorNode.connect(silentGain);
@@ -1192,7 +1224,7 @@
           if (!isLive) return;
           const inputData = e.inputBuffer.getChannelData(0);
 
-          // Gate
+          // Noise gate
           if (gateEnabled) {
             let rms = 0;
             for (let i = 0; i < inputData.length; i++) rms += inputData[i] * inputData[i];
@@ -1201,22 +1233,13 @@
             if (dbRms < gateThreshold) return;
           }
 
-          const bitDepth = parseInt(document.getElementById('bitDepth').value);
-          if (bitDepth === 16) {
-            const pcmData = new Int16Array(inputData.length);
-            for (let i = 0; i < inputData.length; i++) {
-              const s = Math.max(-1, Math.min(1, inputData[i]));
-              pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-            }
-            socket.emit('audio-stream', pcmData.buffer);
-          } else {
-            const pcmData = new Int8Array(inputData.length);
-            for (let i = 0; i < inputData.length; i++) {
-              const s = Math.max(-1, Math.min(1, inputData[i]));
-              pcmData[i] = s * 127;
-            }
-            socket.emit('audio-stream', pcmData.buffer);
+          // Always send 16-bit for quality
+          const pcmData = new Int16Array(inputData.length);
+          for (let i = 0; i < inputData.length; i++) {
+            const s = Math.max(-1, Math.min(1, inputData[i]));
+            pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
           }
+          socket.emit('audio-stream', pcmData.buffer);
         };
 
         audioInitialized = true;
@@ -1234,14 +1257,17 @@
     }
 
     function rebuildChain() {
-      // Disconnect existing chain from gainNode onward
+      // Disconnect the chain from gainNode onward (not source→highPass→gainNode)
       try { gainNode.disconnect(); } catch(e) {}
       try { eqLowFilter.disconnect(); } catch(e) {}
       try { eqLowMidFilter.disconnect(); } catch(e) {}
       try { eqHighMidFilter.disconnect(); } catch(e) {}
       try { eqHighFilter.disconnect(); } catch(e) {}
       try { compressorNode.disconnect(); } catch(e) {}
+      try { makeupGainNode.disconnect(); } catch(e) {}
+      try { limiterNode.disconnect(); } catch(e) {}
 
+      // Chain: gainNode → [EQ] → [comp → makeup] → limiter → outputGain → analyser
       let chain = gainNode;
 
       if (eqEnabled) {
@@ -1254,13 +1280,23 @@
 
       if (compEnabled) {
         chain.connect(compressorNode);
-        chain = compressorNode;
+        compressorNode.connect(makeupGainNode);
+        chain = makeupGainNode;
       }
 
-      chain.connect(outputGainNode);
+      // Limiter always on — prevents clipping
+      chain.connect(limiterNode);
+      limiterNode.connect(outputGainNode);
       outputGainNode.connect(analyserNode);
+
       if (recordDestination) {
         try { outputGainNode.connect(recordDestination); } catch(e) {}
+      }
+      if (processorNode) {
+        try { outputGainNode.connect(processorNode); } catch(e) {}
+      }
+      if (monitorGainNode) {
+        try { outputGainNode.connect(monitorGainNode); } catch(e) {}
       }
     }
 
@@ -1322,19 +1358,23 @@
       }
     }
 
-    // CONTROLS
+    // CONTROLS — all gain sliders work in dB
     function updateGain() {
-      const val = parseFloat(document.getElementById('inputGain').value);
-      const db = val > 0 ? (20 * Math.log10(val)).toFixed(1) : '-∞';
-      document.getElementById('inputGainVal').textContent = db + ' dB';
-      if (gainNode) gainNode.gain.value = val;
+      const db = parseFloat(document.getElementById('inputGain').value);
+      document.getElementById('inputGainVal').textContent = (db > 0 ? '+' : '') + db + ' dB';
+      if (gainNode) gainNode.gain.value = dbToGain(db);
     }
 
     function updateOutput() {
-      const val = parseFloat(document.getElementById('outputLevel').value);
-      const db = val > 0 ? (20 * Math.log10(val)).toFixed(1) : '-∞';
-      document.getElementById('outputLevelVal').textContent = db + ' dB';
-      if (outputGainNode) outputGainNode.gain.value = val;
+      const db = parseFloat(document.getElementById('outputLevel').value);
+      document.getElementById('outputLevelVal').textContent = (db > 0 ? '+' : '') + db + ' dB';
+      if (outputGainNode) outputGainNode.gain.value = dbToGain(db);
+    }
+
+    function updateMakeup() {
+      const db = parseFloat(document.getElementById('makeupGain').value);
+      document.getElementById('makeupGainVal').textContent = (db > 0 ? '+' : '') + db + ' dB';
+      if (makeupGainNode) makeupGainNode.gain.value = dbToGain(db);
     }
 
     function updateMonitor() {
