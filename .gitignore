@@ -5,3 +5,7 @@ dist/
 cloudflared
 .claude/
 cf_out.log
+*.app
+*.app/
+Subversive Radio.app/
+assets/
