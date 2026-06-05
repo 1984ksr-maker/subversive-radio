@@ -409,8 +409,9 @@
 
     // Audio buffer queue for smooth playback
     let nextPlayTime = 0;
-    const BUFFER_AHEAD = 0.15;  // 150ms buffer to absorb network jitter
-    let bufferHealth = 0;
+    const BUFFER_AHEAD = 0.08;  // 80ms buffer — small to reduce latency
+    const MAX_BUFFER_AHEAD = 0.5; // If more than 500ms ahead, reset to prevent echo
+    let activeSources = [];
 
     function connectSocket() {
       const serverUrl = window.location.origin;
@@ -579,11 +580,18 @@
         const buffer = audioContext.createBuffer(1, float32.length, 44100);
         buffer.getChannelData(0).set(float32);
         const duration = buffer.duration;
-
         const now = audioContext.currentTime;
 
-        // If we've fallen behind or this is the first chunk, reset the schedule
+        // If we've fallen behind, reset schedule
         if (nextPlayTime < now) {
+          nextPlayTime = now + BUFFER_AHEAD;
+        }
+
+        // If buffer is too far ahead (causes echo), flush and reset
+        if (nextPlayTime - now > MAX_BUFFER_AHEAD) {
+          // Stop all queued sources to prevent echo
+          activeSources.forEach(s => { try { s.stop(); } catch(e) {} });
+          activeSources = [];
           nextPlayTime = now + BUFFER_AHEAD;
         }
 
@@ -592,11 +600,14 @@
         source.connect(gainNode);
         source.start(nextPlayTime);
 
-        // Schedule the next chunk right after this one ends (gapless)
-        nextPlayTime += duration;
+        // Track active sources, clean up finished ones
+        activeSources.push(source);
+        source.onended = () => {
+          activeSources = activeSources.filter(s => s !== source);
+        };
 
-        // Track buffer health for status display
-        bufferHealth = nextPlayTime - now;
+        // Schedule next chunk gapless
+        nextPlayTime += duration;
       } catch (e) {}
     }
 
@@ -617,6 +628,9 @@
       } else {
         isListening = false;
         nextPlayTime = 0;
+        // Stop all playing audio to prevent echo
+        activeSources.forEach(s => { try { s.stop(); } catch(e) {} });
+        activeSources = [];
         btn.textContent = 'TUNE IN';
         btn.classList.remove('listening');
         document.getElementById('statusText').textContent = 'Paused';

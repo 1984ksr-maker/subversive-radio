@@ -1103,7 +1103,7 @@
       const deviceId = document.getElementById('inputDevice').value;
       try {
         const newStream = await navigator.mediaDevices.getUserMedia({
-          audio: { deviceId: { exact: deviceId }, echoCancellation: true, noiseSuppression: false, autoGainControl: false }
+          audio: { deviceId: { exact: deviceId }, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
         });
         if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
         mediaStream = newStream;
@@ -1124,7 +1124,7 @@
 
         const deviceId = document.getElementById('inputDevice').value;
         mediaStream = await navigator.mediaDevices.getUserMedia({
-          audio: { deviceId: deviceId ? { exact: deviceId } : undefined, echoCancellation: true, noiseSuppression: false, autoGainControl: false }
+          audio: { deviceId: deviceId ? { exact: deviceId } : undefined, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
         });
 
         sourceNode = audioContext.createMediaStreamSource(mediaStream);
