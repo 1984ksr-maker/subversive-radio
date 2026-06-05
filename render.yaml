@@ -3,9 +3,11 @@ services:
     name: subversive-radio
     runtime: node
     plan: free
-    buildCommand: npm install --production
+    buildCommand: npm install --omit=dev
     startCommand: node server.js
     envVars:
       - key: NODE_ENV
         value: production
+      - key: RENDER
+        value: "true"
     healthCheckPath: /health
