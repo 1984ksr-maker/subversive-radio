@@ -718,6 +718,13 @@
     .music-play-btn { width: 44px; height: 44px; font-size: 18px; }
     .music-btn.active { border-color: var(--amber); color: var(--amber); background: rgba(255,170,0,0.1); }
 
+    /* SOURCE MODE */
+    .source-mode-btn.active {
+      border-color: var(--red) !important;
+      color: var(--red) !important;
+      background: rgba(255, 45, 45, 0.15) !important;
+    }
+
     /* EXTERNAL INPUT */
     .ext-connect-btn.connected {
       background: var(--green) !important;
@@ -939,10 +946,39 @@
           <div class="top-row">
             <div class="go-live-area">
               <button class="go-live-btn" id="goLiveBtn" onclick="toggleLive()">GO LIVE</button>
-              <button class="mic-mute-btn" id="micMuteBtn" onclick="toggleMicMute()">🎙️ MIC ON</button>
-              <select class="input-select" id="inputDevice" onchange="switchInput()">
-                <option value="">Loading inputs...</option>
-              </select>
+
+              <!-- SOURCE MODE SELECTOR -->
+              <div style="width:100%;display:flex;flex-direction:column;gap:6px">
+                <label style="font-size:9px;letter-spacing:2px;color:var(--text-dim);text-transform:uppercase">Source Mode</label>
+                <div class="source-mode-btns" id="sourceModeGroup" style="display:flex;gap:4px">
+                  <button class="source-mode-btn active" data-mode="mic" onclick="setSourceMode('mic')" style="flex:1;padding:8px 6px;border:1px solid #333;border-radius:4px;background:var(--surface2);color:var(--text-dim);font-family:inherit;font-size:9px;letter-spacing:1px;cursor:pointer;transition:all 0.2s">🎙️ MIC ONLY</button>
+                  <button class="source-mode-btn" data-mode="external" onclick="setSourceMode('external')" style="flex:1;padding:8px 6px;border:1px solid #333;border-radius:4px;background:var(--surface2);color:var(--text-dim);font-family:inherit;font-size:9px;letter-spacing:1px;cursor:pointer;transition:all 0.2s">🎛️ EXTERNAL ONLY</button>
+                  <button class="source-mode-btn" data-mode="both" onclick="setSourceMode('both')" style="flex:1;padding:8px 6px;border:1px solid #333;border-radius:4px;background:var(--surface2);color:var(--text-dim);font-family:inherit;font-size:9px;letter-spacing:1px;cursor:pointer;transition:all 0.2s">🎙️+🎛️ BOTH</button>
+                </div>
+              </div>
+
+              <!-- MIC CONTROLS (hidden in external-only mode) -->
+              <div id="micControls" style="width:100%;display:flex;flex-direction:column;gap:6px">
+                <button class="mic-mute-btn" id="micMuteBtn" onclick="toggleMicMute()">🎙️ MIC ON</button>
+                <select class="input-select" id="inputDevice" onchange="switchInput()">
+                  <option value="">Loading inputs...</option>
+                </select>
+              </div>
+
+              <!-- EXTERNAL INPUT QUICK (shown in external/both mode) -->
+              <div id="extQuickControls" style="width:100%;display:none">
+                <div style="display:flex;gap:6px;align-items:center">
+                  <select class="input-select" id="extInputDeviceQuick" style="flex:1" onchange="syncExtDevice(this.value)">
+                    <option value="">-- Select External Input --</option>
+                  </select>
+                  <button class="btn" id="extQuickConnectBtn" onclick="toggleExtInput()" style="padding:8px 12px;border-color:var(--green);color:var(--green);font-size:10px;white-space:nowrap">CONNECT</button>
+                  <button class="btn" onclick="refreshExtDevices()" style="padding:8px 10px" title="Refresh">↻</button>
+                </div>
+                <div id="extQuickStatus" style="display:none;margin-top:6px;font-size:10px;color:var(--green);display:flex;align-items:center;gap:6px">
+                  <span class="ext-status-dot"></span>
+                  <span id="extQuickStatusText">Connected</span>
+                </div>
+              </div>
             </div>
             <div class="meters-area">
               <div class="meter-row">
@@ -1378,6 +1414,10 @@
     let currentBitDepth = 16;
     let currentBufferSize = 4096;
 
+    // Source mode: 'mic', 'external', 'both'
+    let sourceMode = 'mic';
+    let useMic = true;
+
     // Convert dB to linear gain
     function dbToGain(db) { return Math.pow(10, db / 20); }
     // Convert linear gain to dB
@@ -1418,7 +1458,10 @@
     // INPUT DEVICES
     async function loadInputDevices() {
       try {
-        await navigator.mediaDevices.getUserMedia({ audio: true });
+        // Only request mic permission if we're using mic
+        if (useMic) {
+          await navigator.mediaDevices.getUserMedia({ audio: true });
+        }
         const devices = await navigator.mediaDevices.enumerateDevices();
         const audioInputs = devices.filter(d => d.kind === 'audioinput');
         const select = document.getElementById('inputDevice');
@@ -1431,7 +1474,7 @@
     }
 
     async function switchInput() {
-      if (!audioContext) return;
+      if (!audioContext || !useMic) return;
       const deviceId = document.getElementById('inputDevice').value;
       try {
         const newStream = await navigator.mediaDevices.getUserMedia({
@@ -1441,12 +1484,59 @@
         mediaStream = newStream;
         sourceNode.disconnect();
         sourceNode = audioContext.createMediaStreamSource(mediaStream);
-        sourceNode.connect(gainNode);
+        sourceNode.connect(highPassFilter);
       } catch (e) {}
     }
 
-    // AUDIO INIT — proper gain staging:
+    // SOURCE MODE SWITCHING
+    function setSourceMode(mode) {
+      sourceMode = mode;
+      useMic = (mode === 'mic' || mode === 'both');
+
+      // Update button states
+      document.querySelectorAll('.source-mode-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.mode === mode);
+      });
+
+      // Show/hide mic controls
+      const micControls = document.getElementById('micControls');
+      const extQuick = document.getElementById('extQuickControls');
+
+      if (mode === 'mic') {
+        micControls.style.display = 'flex';
+        extQuick.style.display = 'none';
+      } else if (mode === 'external') {
+        micControls.style.display = 'none';
+        extQuick.style.display = 'block';
+      } else { // both
+        micControls.style.display = 'flex';
+        extQuick.style.display = 'block';
+      }
+
+      // If audio already initialized and switching to external-only, mute mic
+      if (audioInitialized && gainNode) {
+        if (mode === 'external') {
+          gainNode.gain.value = 0;
+        } else if (!micMuted) {
+          const db = parseFloat(document.getElementById('inputGain').value);
+          gainNode.gain.value = dbToGain(db);
+        }
+      }
+
+      document.getElementById('statusText').textContent =
+        mode === 'mic' ? 'Source: Microphone' :
+        mode === 'external' ? 'Source: External Input (no mic needed)' :
+        'Source: Mic + External';
+    }
+
+    function syncExtDevice(val) {
+      // Sync the quick selector with the main ext input selector
+      document.getElementById('extInputDevice').value = val;
+    }
+
+    // AUDIO INIT — works with or without mic
     // mic → highPass → inputGain → [EQ] → [compressor → makeupGain] → limiter → outputGain → analyser/stream
+    // OR: external input → limiter → outputGain (no mic required)
     async function initAudio() {
       if (audioInitialized) return;
 
@@ -1454,12 +1544,24 @@
         currentSampleRate = parseInt(document.getElementById('sampleRate').value);
         audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: currentSampleRate });
 
-        const deviceId = document.getElementById('inputDevice').value;
-        mediaStream = await navigator.mediaDevices.getUserMedia({
-          audio: { deviceId: deviceId ? { exact: deviceId } : undefined, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-        });
-
-        sourceNode = audioContext.createMediaStreamSource(mediaStream);
+        // ===== MIC SOURCE (only if mic mode or both mode) =====
+        if (useMic) {
+          const deviceId = document.getElementById('inputDevice').value;
+          mediaStream = await navigator.mediaDevices.getUserMedia({
+            audio: { deviceId: deviceId ? { exact: deviceId } : undefined, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+          });
+          sourceNode = audioContext.createMediaStreamSource(mediaStream);
+        } else {
+          // NO MIC — create a silent source placeholder
+          // This keeps the audio chain intact without requiring mic permission
+          const silentBuffer = audioContext.createBuffer(1, 1024, currentSampleRate);
+          const silentSource = audioContext.createBufferSource();
+          silentSource.buffer = silentBuffer;
+          silentSource.loop = true;
+          silentSource.start();
+          sourceNode = silentSource;
+          mediaStream = null;
+        }
 
         // High-pass filter — cut rumble below 80Hz
         highPassFilter = audioContext.createBiquadFilter();
@@ -1469,7 +1571,11 @@
 
         // Input gain — dB slider mapped to linear
         gainNode = audioContext.createGain();
-        gainNode.gain.value = dbToGain(parseFloat(document.getElementById('inputGain').value));
+        if (sourceMode === 'external') {
+          gainNode.gain.value = 0; // mute mic path in external-only mode
+        } else {
+          gainNode.gain.value = dbToGain(parseFloat(document.getElementById('inputGain').value));
+        }
 
         // EQ filters
         eqLowFilter = audioContext.createBiquadFilter();
@@ -1580,11 +1686,19 @@
         audioInitialized = true;
         drawVisualizer();
         startMeters();
-        await loadInputDevices();
+
+        // Only load mic input devices if mic is being used
+        if (useMic) {
+          await loadInputDevices();
+        }
 
       } catch (err) {
         console.error('Audio init failed:', err);
-        document.getElementById('statusText').textContent = 'Mic access denied or unavailable';
+        if (useMic) {
+          document.getElementById('statusText').textContent = 'Mic access denied — try EXTERNAL ONLY mode';
+        } else {
+          document.getElementById('statusText').textContent = 'Audio init failed: ' + err.message;
+        }
         audioContext = null;
         audioInitialized = false;
         throw err;
@@ -1899,6 +2013,13 @@
       const dot = document.getElementById('statusDot');
 
       if (isLive) {
+        // Validate: in external mode, must have external input connected
+        if (sourceMode === 'external' && !extConnected) {
+          isLive = false;
+          alert('Connect an external input device first!\n\nSelect your CDJ/audio interface from the dropdown and click CONNECT.');
+          return;
+        }
+
         btn.textContent = 'ON AIR';
         btn.classList.add('live');
         badge.textContent = 'ON AIR';
@@ -1908,6 +2029,9 @@
           name: document.getElementById('stationNameInput').value,
           tagline: document.getElementById('stationTagline').value
         });
+
+        const modeLabel = sourceMode === 'mic' ? 'MIC' : sourceMode === 'external' ? 'EXTERNAL INPUT' : 'MIC + EXTERNAL';
+        document.getElementById('statusText').textContent = 'LIVE — Source: ' + modeLabel;
       } else {
         btn.textContent = 'GO LIVE';
         btn.classList.remove('live');
@@ -2632,24 +2756,37 @@
 
     async function refreshExtDevices() {
       try {
-        // Request permission first so labels appear
-        const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        tempStream.getTracks().forEach(t => t.stop());
+        // Try to get permission so labels appear (may fail in external-only mode)
+        try {
+          const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          tempStream.getTracks().forEach(t => t.stop());
+        } catch (e) {
+          // Permission denied — still try to enumerate (labels may be blank)
+        }
 
         const devices = await navigator.mediaDevices.enumerateDevices();
         const audioInputs = devices.filter(d => d.kind === 'audioinput');
-        const select = document.getElementById('extInputDevice');
-        const currentVal = select.value;
-        select.innerHTML = '<option value="">-- Select External Input --</option>';
 
-        audioInputs.forEach((dev, i) => {
-          const opt = document.createElement('option');
-          opt.value = dev.deviceId;
-          opt.textContent = dev.label || `Audio Input ${i + 1}`;
-          select.appendChild(opt);
+        // Populate BOTH selectors (main and quick)
+        const selectors = [
+          document.getElementById('extInputDevice'),
+          document.getElementById('extInputDeviceQuick')
+        ];
+
+        selectors.forEach(select => {
+          if (!select) return;
+          const currentVal = select.value;
+          select.innerHTML = '<option value="">-- Select External Input --</option>';
+
+          audioInputs.forEach((dev, i) => {
+            const opt = document.createElement('option');
+            opt.value = dev.deviceId;
+            opt.textContent = dev.label || `Audio Input ${i + 1}`;
+            select.appendChild(opt);
+          });
+
+          if (currentVal) select.value = currentVal;
         });
-
-        if (currentVal) select.value = currentVal;
       } catch (e) {
         console.error('Cannot enumerate audio devices:', e);
       }
@@ -2667,7 +2804,13 @@
         return;
       }
 
-      const deviceId = document.getElementById('extInputDevice').value;
+      // Sync device selection from whichever selector was used
+      const quickSelect = document.getElementById('extInputDeviceQuick');
+      const mainSelect = document.getElementById('extInputDevice');
+      if (quickSelect.value && !mainSelect.value) mainSelect.value = quickSelect.value;
+      if (mainSelect.value && !quickSelect.value) quickSelect.value = mainSelect.value;
+
+      const deviceId = mainSelect.value || quickSelect.value;
       if (!deviceId) {
         alert('Select an external audio input device first');
         return;
@@ -2721,7 +2864,7 @@
 
         extConnected = true;
 
-        // Update UI
+        // Update UI — main section
         const btn = document.getElementById('extConnectBtn');
         btn.textContent = 'DISCONNECT';
         btn.classList.add('connected');
@@ -2735,6 +2878,19 @@
         const select = document.getElementById('extInputDevice');
         const deviceName = select.options[select.selectedIndex].text;
         document.getElementById('extStatusText').textContent = 'Connected: ' + deviceName;
+
+        // Update UI — quick controls
+        const quickBtn = document.getElementById('extQuickConnectBtn');
+        if (quickBtn) {
+          quickBtn.textContent = 'DISCONNECT';
+          quickBtn.style.borderColor = 'var(--red)';
+          quickBtn.style.color = 'var(--red)';
+        }
+        const quickStatus = document.getElementById('extQuickStatus');
+        if (quickStatus) {
+          quickStatus.style.display = 'flex';
+          document.getElementById('extQuickStatusText').textContent = 'Connected: ' + deviceName;
+        }
 
         // Start metering
         startExtMetering();
@@ -2774,6 +2930,16 @@
       document.getElementById('extInputToggle').textContent = 'OFF';
       document.getElementById('extInputToggle').classList.remove('active');
       document.getElementById('extInputStatus').style.display = 'none';
+
+      // Update quick controls
+      const quickBtn = document.getElementById('extQuickConnectBtn');
+      if (quickBtn) {
+        quickBtn.textContent = 'CONNECT';
+        quickBtn.style.borderColor = 'var(--green)';
+        quickBtn.style.color = 'var(--green)';
+      }
+      const quickStatus = document.getElementById('extQuickStatus');
+      if (quickStatus) quickStatus.style.display = 'none';
     }
 
     async function reconnectExtInput() {
