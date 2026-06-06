@@ -1069,10 +1069,60 @@
         <div class="panel-section">
           <h2>Music Player</h2>
           <div class="music-player">
-            <div class="music-dropzone" id="musicDropzone" onclick="document.getElementById('musicFileInput').click()" ondrop="handleMusicDrop(event)" ondragover="event.preventDefault();this.classList.add('dragover')" ondragleave="this.classList.remove('dragover')">
-              <input type="file" id="musicFileInput" accept="audio/*" multiple style="display:none" onchange="handleMusicFiles(this.files)">
-              <div class="dropzone-text">Drop audio files here or click to browse</div>
-              <div class="dropzone-formats">MP3, WAV, OGG, FLAC, M4A</div>
+            <!-- SOURCE TABS -->
+            <div style="display:flex;gap:6px;margin-bottom:12px">
+              <button class="source-btn active" id="musicTabFiles" onclick="showMusicSource('files')" style="flex:1;padding:10px;font-size:10px">📁 FILES</button>
+              <button class="source-btn" id="musicTabCapture" onclick="showMusicSource('capture')" style="flex:1;padding:10px;font-size:10px">🎵 CAPTURE APP</button>
+              <button class="source-btn" id="musicTabUrl" onclick="showMusicSource('url')" style="flex:1;padding:10px;font-size:10px">🔗 URL</button>
+            </div>
+
+            <!-- FILES SOURCE -->
+            <div class="music-source" id="musicSourceFiles">
+              <div class="music-dropzone" id="musicDropzone" onclick="document.getElementById('musicFileInput').click()" ondrop="handleMusicDrop(event)" ondragover="event.preventDefault();this.classList.add('dragover')" ondragleave="this.classList.remove('dragover')">
+                <input type="file" id="musicFileInput" accept="audio/*" multiple style="display:none" onchange="handleMusicFiles(this.files)">
+                <div class="dropzone-text">Drop audio files here or click to browse</div>
+                <div class="dropzone-formats">MP3, WAV, OGG, FLAC, M4A</div>
+              </div>
+            </div>
+
+            <!-- CAPTURE APP SOURCE -->
+            <div class="music-source" id="musicSourceCapture" style="display:none">
+              <div style="text-align:center;padding:16px">
+                <button class="btn" onclick="startAppCapture()" style="border-color:var(--amber);color:var(--amber);font-size:12px;padding:14px 24px;width:100%">
+                  🎵 CAPTURE SPOTIFY / YOUTUBE / ANY APP
+                </button>
+                <div style="font-size:10px;color:var(--text-dim);margin-top:10px;line-height:1.6">
+                  Grabs audio <strong style="color:var(--green)">directly</strong> from any app — not through the mic.<br>
+                  Digital quality, no room noise.
+                </div>
+                <div id="captureStatus" style="margin-top:10px;font-size:11px;color:var(--text-dim)"></div>
+                <div id="captureControls" style="display:none;margin-top:10px">
+                  <div style="display:flex;align-items:center;gap:8px;justify-content:center">
+                    <span style="font-size:10px;color:var(--green)">● CAPTURING</span>
+                    <button class="btn" onclick="stopAppCapture()" style="width:auto;padding:6px 16px;border-color:var(--red);color:var(--red)">STOP</button>
+                  </div>
+                </div>
+              </div>
+              <div style="padding:0 16px 16px;font-size:9px;color:#444;line-height:1.6">
+                <strong>How it works:</strong><br>
+                1. Click the button above<br>
+                2. Pick the tab/app playing music (YouTube, Spotify, etc.)<br>
+                3. Music flows directly into your broadcast<br>
+                4. Mix with your mic using the sliders below
+              </div>
+            </div>
+
+            <!-- URL SOURCE -->
+            <div class="music-source" id="musicSourceUrl" style="display:none">
+              <div style="padding:8px 0">
+                <div class="control-row">
+                  <input type="text" id="streamUrlInput" placeholder="Paste audio URL (.mp3, stream, radio)..." style="flex:1">
+                </div>
+                <button class="btn" onclick="loadStreamUrl()" style="border-color:var(--amber);color:var(--amber);margin-top:6px">LOAD & PLAY</button>
+                <div style="font-size:9px;color:var(--text-dim);margin-top:6px;line-height:1.5">
+                  Works with direct audio URLs, internet radio streams, .mp3 links
+                </div>
+              </div>
             </div>
             <div class="music-playlist" id="musicPlaylist"></div>
             <div class="music-now-playing" id="musicNowPlaying" style="display:none">
@@ -1099,23 +1149,6 @@
               <label>Mic Vol</label>
               <input type="range" id="micMixVol" min="0" max="1.5" step="0.01" value="1.0" oninput="updateMicMixVol()">
               <span class="value" id="micMixVolVal">100%</span>
-            </div>
-            <div class="toggle-row" style="margin-top:6px">
-              <label>Capture System Audio</label>
-              <div class="toggle" id="toggleSystemAudio" onclick="toggleSystemAudio()"></div>
-            </div>
-            <div style="font-size:9px;color:var(--text-dim);margin-top:4px;line-height:1.5">
-              Captures Spotify, YouTube, or any app audio playing on your computer
-            </div>
-            <div style="margin-top:12px;border-top:1px solid #222;padding-top:12px">
-              <div class="control-row">
-                <label>URL</label>
-                <input type="text" id="streamUrlInput" placeholder="Paste audio or stream URL..." style="flex:1">
-                <button class="btn" style="width:auto;margin:0;padding:6px 12px" onclick="loadStreamUrl()">LOAD</button>
-              </div>
-              <div style="font-size:9px;color:var(--text-dim);margin-top:4px;line-height:1.5">
-                Direct audio URLs (.mp3, .ogg, internet radio streams)
-              </div>
             </div>
           </div>
         </div>
@@ -2179,6 +2212,77 @@
       if (systemAudioSource) { try { systemAudioSource.disconnect(); } catch(e) {} systemAudioSource = null; }
       if (systemAudioGain) { try { systemAudioGain.disconnect(); } catch(e) {} systemAudioGain = null; }
       if (systemAudioStream) { systemAudioStream.getTracks().forEach(t => t.stop()); systemAudioStream = null; }
+    }
+
+    function showMusicSource(tab) {
+      document.querySelectorAll('.music-source').forEach(el => el.style.display = 'none');
+      document.getElementById('musicTabFiles').classList.remove('active');
+      document.getElementById('musicTabCapture').classList.remove('active');
+      document.getElementById('musicTabUrl').classList.remove('active');
+
+      if (tab === 'files') {
+        document.getElementById('musicSourceFiles').style.display = 'block';
+        document.getElementById('musicTabFiles').classList.add('active');
+      } else if (tab === 'capture') {
+        document.getElementById('musicSourceCapture').style.display = 'block';
+        document.getElementById('musicTabCapture').classList.add('active');
+      } else {
+        document.getElementById('musicSourceUrl').style.display = 'block';
+        document.getElementById('musicTabUrl').classList.add('active');
+      }
+    }
+
+    async function startAppCapture() {
+      try {
+        if (!audioContext) await initAudio();
+
+        // Request screen/tab capture with audio
+        systemAudioStream = await navigator.mediaDevices.getDisplayMedia({
+          video: { width: 1, height: 1 }, // minimal video — we only want audio
+          audio: {
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false
+          }
+        });
+
+        // Stop the video track — we only want audio
+        systemAudioStream.getVideoTracks().forEach(t => t.stop());
+
+        const audioTracks = systemAudioStream.getAudioTracks();
+        if (audioTracks.length === 0) {
+          document.getElementById('captureStatus').textContent = '⚠️ No audio — make sure you selected "Share audio" checkbox';
+          document.getElementById('captureStatus').style.color = '#ff6666';
+          return;
+        }
+
+        // Connect to audio chain
+        systemAudioSource = audioContext.createMediaStreamSource(systemAudioStream);
+        systemAudioGain = audioContext.createGain();
+        systemAudioGain.gain.value = parseFloat(document.getElementById('musicVolume').value);
+        systemAudioSource.connect(systemAudioGain);
+        systemAudioGain.connect(limiterNode);
+
+        document.getElementById('captureStatus').textContent = '';
+        document.getElementById('captureControls').style.display = 'block';
+
+        // Auto-stop when user stops sharing
+        audioTracks[0].onended = () => {
+          stopAppCapture();
+        };
+
+      } catch (e) {
+        document.getElementById('captureStatus').textContent = 'Cancelled or denied';
+        document.getElementById('captureStatus').style.color = '#ff6666';
+        console.error('Capture failed:', e);
+      }
+    }
+
+    function stopAppCapture() {
+      cleanupSystemAudio();
+      document.getElementById('captureControls').style.display = 'none';
+      document.getElementById('captureStatus').textContent = 'Stopped';
+      document.getElementById('captureStatus').style.color = 'var(--text-dim)';
     }
 
     function loadStreamUrl() {
