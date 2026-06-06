@@ -1366,6 +1366,19 @@
           <h2>Station Settings</h2>
           <input type="text" id="stationNameInput" placeholder="Station name" value="SUBVERSIVE RADIO" onchange="updateStation()">
           <input type="text" id="stationTagline" placeholder="Tagline" value="Broadcasting from the underground" onchange="updateStation()">
+
+          <div style="margin-top:16px;padding-top:16px;border-top:1px solid #333">
+            <h2 style="font-size:11px;letter-spacing:2px;color:#ff2d2d;margin-bottom:10px">🔒 CHANGE PASSWORD</h2>
+            <input type="password" id="currentPw" placeholder="Current password" style="margin-bottom:6px">
+            <input type="password" id="newPw" placeholder="New password" style="margin-bottom:6px">
+            <input type="password" id="confirmPw" placeholder="Confirm new password" style="margin-bottom:8px">
+            <button class="btn" onclick="changePassword()" style="width:100%;padding:10px;font-size:11px;letter-spacing:2px">CHANGE PASSWORD</button>
+            <div id="pwMsg" style="font-size:10px;margin-top:6px;text-align:center;min-height:14px"></div>
+          </div>
+
+          <div style="margin-top:12px;text-align:center">
+            <a href="/auth/logout" style="color:#666;font-size:9px;letter-spacing:1px;text-decoration:none">⏻ LOGOUT</a>
+          </div>
         </div>
       </div>
     </div>
@@ -2280,6 +2293,38 @@
       const tagline = document.getElementById('stationTagline').value;
       document.getElementById('stationName').textContent = name;
       socket.emit('update-station', { name, tagline });
+    }
+
+    async function changePassword() {
+      const cur = document.getElementById('currentPw').value;
+      const np = document.getElementById('newPw').value;
+      const cp = document.getElementById('confirmPw').value;
+      const msg = document.getElementById('pwMsg');
+      msg.style.color = '#ff4444';
+
+      if (!cur || !np || !cp) { msg.textContent = 'Fill in all fields'; return; }
+      if (np !== cp) { msg.textContent = 'New passwords do not match'; return; }
+      if (np.length < 4) { msg.textContent = 'Password must be at least 4 characters'; return; }
+
+      try {
+        const res = await fetch('/api/change-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ currentPassword: cur, newPassword: np })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          msg.style.color = '#00ff88';
+          msg.textContent = '✓ Password changed';
+          document.getElementById('currentPw').value = '';
+          document.getElementById('newPw').value = '';
+          document.getElementById('confirmPw').value = '';
+        } else {
+          msg.textContent = data.error || 'Failed to change password';
+        }
+      } catch (e) {
+        msg.textContent = 'Network error';
+      }
     }
 
     // INIT
