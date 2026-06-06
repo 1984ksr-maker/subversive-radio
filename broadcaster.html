@@ -178,6 +178,29 @@
     .go-live-btn.live { border-color: var(--red); background: var(--red); color: #fff; box-shadow: 0 0 40px var(--red-glow); }
     .go-live-btn.live:hover { background: #cc0000; }
 
+    .mic-mute-btn {
+      width: 100%;
+      padding: 10px;
+      border: 2px solid var(--green);
+      border-radius: 6px;
+      background: rgba(0, 255, 136, 0.1);
+      color: var(--green);
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: bold;
+      letter-spacing: 2px;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-transform: uppercase;
+    }
+    .mic-mute-btn:hover { background: rgba(0, 255, 136, 0.2); }
+    .mic-mute-btn.muted {
+      border-color: var(--red);
+      background: rgba(255, 45, 45, 0.15);
+      color: var(--red);
+      animation: pulse 1.5s infinite;
+    }
+
     .input-select {
       width: 100%;
       background: var(--bg);
@@ -895,6 +918,7 @@
           <div class="top-row">
             <div class="go-live-area">
               <button class="go-live-btn" id="goLiveBtn" onclick="toggleLive()">GO LIVE</button>
+              <button class="mic-mute-btn" id="micMuteBtn" onclick="toggleMicMute()">🎙️ MIC ON</button>
               <select class="input-select" id="inputDevice" onchange="switchInput()">
                 <option value="">Loading inputs...</option>
               </select>
@@ -1616,7 +1640,7 @@
     function updateGain() {
       const db = parseFloat(document.getElementById('inputGain').value);
       document.getElementById('inputGainVal').textContent = (db > 0 ? '+' : '') + db + ' dB';
-      if (gainNode) gainNode.gain.value = dbToGain(db);
+      if (gainNode && !micMuted) gainNode.gain.value = dbToGain(db);
     }
 
     function updateOutput() {
@@ -1996,6 +2020,28 @@
     }).catch(() => {});
 
     drawEQCurve();
+
+    // MIC MUTE — mutes mic but music keeps playing
+    let micMuted = false;
+
+    function toggleMicMute() {
+      micMuted = !micMuted;
+      const btn = document.getElementById('micMuteBtn');
+
+      if (micMuted) {
+        // Mute: set mic gain to 0, music keeps flowing through limiter
+        if (gainNode) gainNode.gain.value = 0;
+        btn.textContent = '🔇 MIC OFF';
+        btn.classList.add('muted');
+      } else {
+        // Unmute: restore mic gain
+        const db = parseFloat(document.getElementById('inputGain').value);
+        const mixVol = parseFloat(document.getElementById('micMixVol').value);
+        if (gainNode) gainNode.gain.value = dbToGain(db) * mixVol;
+        btn.textContent = '🎙️ MIC ON';
+        btn.classList.remove('muted');
+      }
+    }
 
     // MUSIC PLAYER
     let playlist = [];
