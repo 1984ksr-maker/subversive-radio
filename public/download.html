@@ -3,13 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Subversive Radio — Download</title>
+  <title>Subversive Radio — Download & Setup</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     :root {
       --red: #ff2d2d;
       --red-glow: rgba(255, 45, 45, 0.4);
       --green: #00ff88;
+      --amber: #ffaa00;
+      --blue: #4488ff;
       --bg: #0a0a0a;
       --surface: #141414;
       --surface2: #1e1e1e;
@@ -24,18 +26,17 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      padding: 20px;
     }
     .page {
       width: 100%;
-      max-width: 560px;
-      padding: 20px;
+      max-width: 700px;
     }
     .card {
       background: var(--surface);
       border: 1px solid #222;
       border-radius: 16px;
       padding: 48px 36px;
-      text-align: center;
     }
     .logo {
       font-size: 28px;
@@ -44,12 +45,14 @@
       text-transform: uppercase;
       color: var(--red);
       margin-bottom: 8px;
+      text-align: center;
     }
     .tagline {
       font-size: 12px;
       color: var(--text-dim);
       letter-spacing: 2px;
-      margin-bottom: 40px;
+      margin-bottom: 10px;
+      text-align: center;
     }
     .version {
       display: inline-block;
@@ -60,12 +63,49 @@
       color: var(--text-dim);
       letter-spacing: 1px;
       margin-bottom: 32px;
+      text-align: center;
+      width: 100%;
     }
+    .version span { display: inline-block; }
+
+    /* NAV */
+    .nav-links {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    .nav-link {
+      padding: 8px 16px;
+      border: 1px solid #333;
+      border-radius: 6px;
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 11px;
+      letter-spacing: 1px;
+      transition: all 0.2s;
+    }
+    .nav-link:hover { border-color: var(--red); color: var(--red); }
+    .nav-link.active { border-color: var(--red); color: var(--red); background: rgba(255,45,45,0.1); }
+
+    /* SECTION HEADERS */
+    .section-title {
+      font-size: 11px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--red);
+      margin: 32px 0 16px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #222;
+    }
+    .section-title:first-of-type { margin-top: 0; }
+
+    /* DOWNLOADS */
     .downloads {
       display: flex;
       flex-direction: column;
       gap: 12px;
-      margin-bottom: 32px;
+      margin-bottom: 16px;
     }
     .download-btn {
       display: flex;
@@ -108,6 +148,57 @@
       border-color: var(--red);
       background: rgba(255, 45, 45, 0.1);
     }
+
+    /* SOFTWARE GRID */
+    .software-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .software-card {
+      padding: 16px;
+      border: 1px solid #222;
+      border-radius: 8px;
+      background: var(--surface2);
+      transition: all 0.2s;
+    }
+    .software-card:hover { border-color: #444; }
+    .software-card h4 {
+      font-size: 12px;
+      font-weight: bold;
+      margin-bottom: 4px;
+      color: var(--text);
+    }
+    .software-card .sw-desc {
+      font-size: 10px;
+      color: var(--text-dim);
+      line-height: 1.5;
+      margin-bottom: 10px;
+    }
+    .software-card .sw-platforms {
+      font-size: 9px;
+      color: var(--amber);
+      margin-bottom: 8px;
+      letter-spacing: 1px;
+    }
+    .software-card .sw-link {
+      display: inline-block;
+      padding: 6px 14px;
+      border: 1px solid var(--green);
+      border-radius: 4px;
+      color: var(--green);
+      text-decoration: none;
+      font-size: 10px;
+      letter-spacing: 1px;
+      transition: all 0.2s;
+    }
+    .software-card .sw-link:hover {
+      background: var(--green);
+      color: #000;
+    }
+
+    /* SEPARATOR */
     .separator {
       display: flex;
       align-items: center;
@@ -123,11 +214,14 @@
       height: 1px;
       background: #222;
     }
+
+    /* WEB OPTION */
     .web-option {
       padding: 20px;
       border: 1px solid #222;
       border-radius: 8px;
       background: var(--surface2);
+      margin-bottom: 20px;
     }
     .web-option h3 {
       font-size: 12px;
@@ -163,16 +257,66 @@
       border-color: var(--green);
       color: var(--green);
     }
+
+    /* SETUP GUIDE */
+    .setup-guide {
+      padding: 20px;
+      border: 1px solid #222;
+      border-radius: 8px;
+      background: var(--surface2);
+      margin-bottom: 16px;
+    }
+    .setup-guide h3 {
+      font-size: 12px;
+      letter-spacing: 2px;
+      color: var(--amber);
+      margin-bottom: 12px;
+    }
+    .setup-steps {
+      list-style: none;
+      counter-reset: step;
+    }
+    .setup-steps li {
+      counter-increment: step;
+      padding: 10px 0 10px 36px;
+      position: relative;
+      font-size: 11px;
+      color: var(--text-dim);
+      line-height: 1.6;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    .setup-steps li:last-child { border-bottom: none; }
+    .setup-steps li::before {
+      content: counter(step);
+      position: absolute;
+      left: 0;
+      top: 10px;
+      width: 22px;
+      height: 22px;
+      border: 1px solid #444;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      color: var(--amber);
+    }
+    .setup-steps li strong { color: var(--text); }
+
     .footer-note {
       margin-top: 24px;
       font-size: 10px;
       color: var(--text-dim);
       line-height: 1.6;
+      text-align: center;
     }
+
     @media (max-width: 480px) {
       .card { padding: 32px 20px; }
       .logo { font-size: 22px; letter-spacing: 4px; }
+      .software-grid { grid-template-columns: 1fr; }
       .web-links { flex-direction: column; }
+      .nav-links { flex-wrap: wrap; gap: 8px; }
     }
   </style>
 </head>
@@ -181,14 +325,36 @@
     <div class="card">
       <div class="logo">Subversive Radio</div>
       <div class="tagline">Broadcasting from the underground</div>
-      <div class="version">v1.0.0</div>
+      <div class="version"><span>v1.0.0</span></div>
 
+      <div class="nav-links">
+        <a class="nav-link" href="/">LISTEN</a>
+        <a class="nav-link" href="/broadcaster">BROADCAST</a>
+        <a class="nav-link active" href="/download">DOWNLOAD</a>
+      </div>
+
+      <!-- ===== DESKTOP APP ===== -->
+      <div class="section-title">📦 Desktop App</div>
       <div class="downloads">
         <a class="download-btn primary" href="https://github.com/1984ksr-maker/subversive-radio/releases/latest/download/Subversive-Radio-1.0.0-Mac.dmg">
           <span class="icon">🍎</span>
           <span class="info">
             <span class="platform">Download for Mac</span>
             <span class="detail">macOS (Apple Silicon) • DMG Installer • ~200 MB</span>
+          </span>
+        </a>
+        <a class="download-btn" href="https://github.com/1984ksr-maker/subversive-radio/releases/latest/download/Subversive-Radio-1.0.0-Win.exe">
+          <span class="icon">🪟</span>
+          <span class="info">
+            <span class="platform">Download for Windows</span>
+            <span class="detail">Windows 10/11 (64-bit) • EXE Installer • ~180 MB</span>
+          </span>
+        </a>
+        <a class="download-btn" href="https://github.com/1984ksr-maker/subversive-radio/releases/latest/download/Subversive-Radio-1.0.0-Linux.AppImage">
+          <span class="icon">🐧</span>
+          <span class="info">
+            <span class="platform">Download for Linux</span>
+            <span class="detail">Linux (x64) • AppImage • ~190 MB</span>
           </span>
         </a>
       </div>
@@ -199,15 +365,172 @@
         <h3>No install needed</h3>
         <p>Open the broadcaster or listener directly in your browser. Works on any device — Mac, Windows, Linux, phone.</p>
         <div class="web-links">
-          <a class="web-link" href="/broadcaster">BROADCAST</a>
-          <a class="web-link" href="/">LISTEN</a>
+          <a class="web-link" href="/broadcaster">🎙️ BROADCAST</a>
+          <a class="web-link" href="/">🎧 LISTEN</a>
+        </div>
+      </div>
+
+      <!-- ===== EXTERNAL INPUT SOFTWARE ===== -->
+      <div class="section-title">🎛️ External Input Software (CDJ / Turntable / Other Computer)</div>
+      <p style="font-size:11px;color:var(--text-dim);line-height:1.6;margin-bottom:16px">
+        To route audio from a CDJ, turntable, mixer, audio interface, or another computer into your broadcast,
+        you'll need one of these tools to create a virtual audio device on your system.
+      </p>
+
+      <div class="software-grid">
+        <div class="software-card">
+          <h4>BlackHole (Free)</h4>
+          <div class="sw-desc">Virtual audio driver for macOS. Routes audio between apps with zero latency. Best for Mac DJs.</div>
+          <div class="sw-platforms">macOS</div>
+          <a class="sw-link" href="https://existential.audio/blackhole/" target="_blank" rel="noopener">DOWNLOAD →</a>
+        </div>
+
+        <div class="software-card">
+          <h4>VB-Cable (Free)</h4>
+          <div class="sw-desc">Virtual audio cable for Windows. Creates a virtual input/output pair to pipe audio between apps.</div>
+          <div class="sw-platforms">WINDOWS</div>
+          <a class="sw-link" href="https://vb-audio.com/Cable/" target="_blank" rel="noopener">DOWNLOAD →</a>
+        </div>
+
+        <div class="software-card">
+          <h4>Voicemeeter (Free)</h4>
+          <div class="sw-desc">Advanced virtual mixer. Mix multiple inputs (mic + CDJ + music) into one output. Highly recommended.</div>
+          <div class="sw-platforms">WINDOWS</div>
+          <a class="sw-link" href="https://vb-audio.com/Voicemeeter/" target="_blank" rel="noopener">DOWNLOAD →</a>
+        </div>
+
+        <div class="software-card">
+          <h4>Loopback ($99)</h4>
+          <div class="sw-desc">Premium audio routing for Mac. Create virtual devices, combine sources, route anywhere. Pro quality.</div>
+          <div class="sw-platforms">macOS</div>
+          <a class="sw-link" href="https://rogueamoeba.com/loopback/" target="_blank" rel="noopener">DOWNLOAD →</a>
+        </div>
+
+        <div class="software-card">
+          <h4>JACK Audio (Free)</h4>
+          <div class="sw-desc">Professional audio routing for Linux. Connect any audio source to any destination. Industry standard.</div>
+          <div class="sw-platforms">LINUX • macOS • WINDOWS</div>
+          <a class="sw-link" href="https://jackaudio.org/downloads/" target="_blank" rel="noopener">DOWNLOAD →</a>
+        </div>
+
+        <div class="software-card">
+          <h4>PulseAudio (Free)</h4>
+          <div class="sw-desc">Default Linux sound server. Use pavucontrol to route app audio as virtual input to your browser.</div>
+          <div class="sw-platforms">LINUX</div>
+          <a class="sw-link" href="https://www.freedesktop.org/wiki/Software/PulseAudio/" target="_blank" rel="noopener">INFO →</a>
+        </div>
+      </div>
+
+      <!-- ===== AUDIO INTERFACES ===== -->
+      <div class="section-title">🔌 Recommended Audio Interfaces</div>
+      <p style="font-size:11px;color:var(--text-dim);line-height:1.6;margin-bottom:16px">
+        To connect CDJs, turntables, or mixers physically to your computer, you need a USB audio interface.
+      </p>
+      <div class="software-grid">
+        <div class="software-card">
+          <h4>Focusrite Scarlett 2i2</h4>
+          <div class="sw-desc">2-in/2-out USB audio interface. Plug your mixer's RCA/XLR output directly into your computer.</div>
+          <div class="sw-platforms">~$170 • USB-C</div>
+          <a class="sw-link" href="https://focusrite.com/usb-audio-interface/scarlett/scarlett-2i2" target="_blank" rel="noopener">VIEW →</a>
+        </div>
+
+        <div class="software-card">
+          <h4>Behringer UCA222</h4>
+          <div class="sw-desc">Budget USB audio interface with RCA inputs. Perfect for connecting a DJ mixer or CDJ output.</div>
+          <div class="sw-platforms">~$30 • USB-A</div>
+          <a class="sw-link" href="https://www.behringer.com/product.html?modelCode=0805-AAG" target="_blank" rel="noopener">VIEW →</a>
+        </div>
+      </div>
+
+      <!-- ===== SETUP GUIDES ===== -->
+      <div class="section-title">📋 Setup Guide — CDJ / Turntable to Broadcast</div>
+
+      <div class="setup-guide">
+        <h3>Mac Setup (with BlackHole)</h3>
+        <ol class="setup-steps">
+          <li>Download and install <strong>BlackHole 2ch</strong> from the link above</li>
+          <li>Open <strong>Audio MIDI Setup</strong> (built into Mac) → Create a <strong>Multi-Output Device</strong> combining your speakers + BlackHole</li>
+          <li>Connect your CDJ/mixer's output to your <strong>audio interface</strong> (USB)</li>
+          <li>Open <strong>Subversive Radio Broadcaster</strong> → scroll to <strong>External Input</strong> section</li>
+          <li>Select your audio interface (or BlackHole) from the <strong>Device</strong> dropdown</li>
+          <li>Click <strong>CONNECT</strong> → you'll see the VU meter respond to audio</li>
+          <li>Hit <strong>GO LIVE</strong> — your CDJ audio is now broadcasting!</li>
+        </ol>
+      </div>
+
+      <div class="setup-guide">
+        <h3>Windows Setup (with VB-Cable)</h3>
+        <ol class="setup-steps">
+          <li>Download and install <strong>VB-Cable</strong> from the link above</li>
+          <li>In Windows Sound Settings → set your CDJ/mixer software output to <strong>CABLE Input (VB-Audio)</strong></li>
+          <li>Open <strong>Subversive Radio Broadcaster</strong> → scroll to <strong>External Input</strong></li>
+          <li>Select <strong>CABLE Output (VB-Audio)</strong> from the Device dropdown</li>
+          <li>Click <strong>CONNECT</strong> → VU meter should show audio coming in</li>
+          <li>Hit <strong>GO LIVE</strong> — broadcasting your external audio!</li>
+        </ol>
+      </div>
+
+      <div class="setup-guide">
+        <h3>Another Computer → This Computer</h3>
+        <ol class="setup-steps">
+          <li>On the <strong>sending computer</strong>: connect a <strong>3.5mm or USB audio cable</strong> from its headphone/line-out to your audio interface's input</li>
+          <li>Alternatively, both computers on same network? Use <strong>NDI Tools</strong> (free) or <strong>JACK NetDriver</strong> for network audio</li>
+          <li>On <strong>this computer</strong>: open the Broadcaster → External Input</li>
+          <li>Select the audio interface receiving the other computer's audio</li>
+          <li>Click <strong>CONNECT</strong> and <strong>GO LIVE</strong></li>
+        </ol>
+      </div>
+
+      <div class="setup-guide">
+        <h3>Direct Browser Capture (Easiest)</h3>
+        <ol class="setup-steps">
+          <li>Open the <strong>Broadcaster</strong> in your browser</li>
+          <li>In the <strong>Music Player</strong> section, click the <strong>🎵 CAPTURE APP</strong> tab</li>
+          <li>Click <strong>"CAPTURE SPOTIFY / YOUTUBE / ANY APP"</strong></li>
+          <li>Select the tab or app playing music → check <strong>"Share audio"</strong></li>
+          <li>Audio flows directly into your broadcast — digital quality, no cables needed!</li>
+        </ol>
+      </div>
+
+      <!-- ===== EXTRA TOOLS ===== -->
+      <div class="section-title">🛠️ Extra Broadcasting Tools</div>
+      <div class="software-grid">
+        <div class="software-card">
+          <h4>OBS Studio (Free)</h4>
+          <div class="sw-desc">Stream audio/video. Use its Virtual Camera + Audio output as an input source for complex setups.</div>
+          <div class="sw-platforms">macOS • WINDOWS • LINUX</div>
+          <a class="sw-link" href="https://obsproject.com/download" target="_blank" rel="noopener">DOWNLOAD →</a>
+        </div>
+
+        <div class="software-card">
+          <h4>BUTT (Free)</h4>
+          <div class="sw-desc">Broadcast Using This Tool. Lightweight Icecast/Shoutcast streamer. Alternative for encoding audio streams.</div>
+          <div class="sw-platforms">macOS • WINDOWS • LINUX</div>
+          <a class="sw-link" href="https://danielnoethen.de/butt/" target="_blank" rel="noopener">DOWNLOAD →</a>
+        </div>
+
+        <div class="software-card">
+          <h4>NDI Tools (Free)</h4>
+          <div class="sw-desc">Send audio over your local network from another computer. Zero-latency network audio routing.</div>
+          <div class="sw-platforms">macOS • WINDOWS • LINUX</div>
+          <a class="sw-link" href="https://ndi.video/tools/" target="_blank" rel="noopener">DOWNLOAD →</a>
+        </div>
+
+        <div class="software-card">
+          <h4>Audacity (Free)</h4>
+          <div class="sw-desc">Record and edit audio files before broadcasting. Pre-record transmissions, apply effects, export clips.</div>
+          <div class="sw-platforms">macOS • WINDOWS • LINUX</div>
+          <a class="sw-link" href="https://www.audacityteam.org/download/" target="_blank" rel="noopener">DOWNLOAD →</a>
         </div>
       </div>
 
       <div class="footer-note">
         Open source • No account needed • Encrypted tunnel<br>
-        After installing, open the app — it starts the server and<br>
-        generates a random broadcast link automatically.
+        <a href="https://github.com/1984ksr-maker/subversive-radio" style="color:var(--red);text-decoration:none" target="_blank" rel="noopener">View on GitHub</a>
+         •
+        <a href="/" style="color:var(--green);text-decoration:none">Listen now</a>
+         •
+        <a href="/broadcaster" style="color:var(--amber);text-decoration:none">Start broadcasting</a>
       </div>
     </div>
   </div>

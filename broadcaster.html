@@ -718,6 +718,27 @@
     .music-play-btn { width: 44px; height: 44px; font-size: 18px; }
     .music-btn.active { border-color: var(--amber); color: var(--amber); background: rgba(255,170,0,0.1); }
 
+    /* EXTERNAL INPUT */
+    .ext-connect-btn.connected {
+      background: var(--green) !important;
+      color: #000 !important;
+      border-color: var(--green) !important;
+    }
+
+    .ext-status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      animation: pulse 2s infinite;
+      display: inline-block;
+    }
+
+    .ext-input-controls input[type="checkbox"] {
+      accent-color: var(--green);
+      cursor: pointer;
+    }
+
     /* VOICE PRESETS */
     .voice-preset {
       flex: 0 0 auto;
@@ -1196,6 +1217,62 @@
               <label>Mic Vol</label>
               <input type="range" id="micMixVol" min="0" max="1.5" step="0.01" value="1.0" oninput="updateMicMixVol()">
               <span class="value" id="micMixVolVal">100%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- EXTERNAL AUDIO INPUT -->
+        <div class="panel-section" id="extInputSection">
+          <h2>External Input <button class="toggle-btn" id="extInputToggle">OFF</button></h2>
+          <div style="font-size:10px;color:var(--text-dim);margin-bottom:10px;line-height:1.5">
+            Route audio from a CDJ, turntable, audio interface, or another computer directly into your broadcast.
+          </div>
+          <div class="ext-input-controls">
+            <div class="control-row" style="margin-bottom:8px">
+              <label>Device</label>
+              <select class="input-select" id="extInputDevice" style="flex:1">
+                <option value="">-- Select External Input --</option>
+              </select>
+            </div>
+            <div style="display:flex;gap:8px;margin-bottom:10px">
+              <button class="btn ext-connect-btn" id="extConnectBtn" onclick="toggleExtInput()" style="flex:1;border-color:var(--green);color:var(--green)">
+                CONNECT
+              </button>
+              <button class="btn" onclick="refreshExtDevices()" style="width:auto;padding:8px 12px" title="Refresh device list">
+                ↻
+              </button>
+            </div>
+            <div id="extInputStatus" style="display:none;margin-bottom:10px">
+              <div style="display:flex;align-items:center;gap:8px">
+                <span class="ext-status-dot"></span>
+                <span id="extStatusText" style="font-size:11px;color:var(--green)">Connected</span>
+              </div>
+              <div class="meter-row" style="margin-top:6px">
+                <span class="meter-label">EXT</span>
+                <div class="vu-meter">
+                  <div class="vu-meter-fill" id="vuExt"></div>
+                  <div class="vu-meter-peak" id="vuPeakExt" style="left:0%"></div>
+                </div>
+                <span class="meter-db" id="dbExt">-∞</span>
+              </div>
+            </div>
+            <div class="control-row">
+              <label>Ext Volume</label>
+              <input type="range" id="extInputVolume" min="0" max="2" step="0.01" value="1.0" oninput="updateExtVolume()">
+              <span class="value" id="extVolVal">100%</span>
+            </div>
+            <div class="control-row">
+              <label>Ext Pan</label>
+              <input type="range" id="extInputPan" min="-1" max="1" step="0.01" value="0" oninput="updateExtPan()">
+              <span class="value" id="extPanVal">C</span>
+            </div>
+            <div style="display:flex;gap:6px;margin-top:8px">
+              <label style="font-size:9px;color:var(--text-dim);display:flex;align-items:center;gap:4px;cursor:pointer">
+                <input type="checkbox" id="extStereo" checked onchange="reconnectExtInput()"> Stereo
+              </label>
+              <label style="font-size:9px;color:var(--text-dim);display:flex;align-items:center;gap:4px;cursor:pointer">
+                <input type="checkbox" id="extMonitor" onchange="updateExtMonitor()"> Monitor
+              </label>
             </div>
           </div>
         </div>
@@ -2541,6 +2618,219 @@
       document.getElementById('voiceDelayVal').textContent = Math.round(val * 1000) + ' ms';
       if (voiceDelayNode) voiceDelayNode.delayTime.value = val;
       if (voiceDelayGain) voiceDelayGain.gain.value = val > 0 ? 0.6 : 0;
+    }
+
+    // EXTERNAL AUDIO INPUT
+    let extInputStream = null;
+    let extInputSource = null;
+    let extInputGain = null;
+    let extInputPanner = null;
+    let extInputAnalyser = null;
+    let extMonitorGain = null;
+    let extConnected = false;
+    let extPeakLevel = 0;
+
+    async function refreshExtDevices() {
+      try {
+        // Request permission first so labels appear
+        const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        tempStream.getTracks().forEach(t => t.stop());
+
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const audioInputs = devices.filter(d => d.kind === 'audioinput');
+        const select = document.getElementById('extInputDevice');
+        const currentVal = select.value;
+        select.innerHTML = '<option value="">-- Select External Input --</option>';
+
+        audioInputs.forEach((dev, i) => {
+          const opt = document.createElement('option');
+          opt.value = dev.deviceId;
+          opt.textContent = dev.label || `Audio Input ${i + 1}`;
+          select.appendChild(opt);
+        });
+
+        if (currentVal) select.value = currentVal;
+      } catch (e) {
+        console.error('Cannot enumerate audio devices:', e);
+      }
+    }
+
+    // Enumerate on page load
+    refreshExtDevices();
+
+    // Re-enumerate when devices change (plug/unplug)
+    navigator.mediaDevices.addEventListener('devicechange', refreshExtDevices);
+
+    async function toggleExtInput() {
+      if (extConnected) {
+        disconnectExtInput();
+        return;
+      }
+
+      const deviceId = document.getElementById('extInputDevice').value;
+      if (!deviceId) {
+        alert('Select an external audio input device first');
+        return;
+      }
+
+      try {
+        // Init audio context if not already done
+        if (!audioContext) await initAudio();
+
+        const stereo = document.getElementById('extStereo').checked;
+
+        const constraints = {
+          audio: {
+            deviceId: { exact: deviceId },
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false,
+            channelCount: stereo ? 2 : 1,
+            sampleRate: { ideal: 48000 }
+          }
+        };
+
+        extInputStream = await navigator.mediaDevices.getUserMedia(constraints);
+        extInputSource = audioContext.createMediaStreamSource(extInputStream);
+
+        // Gain control
+        extInputGain = audioContext.createGain();
+        extInputGain.gain.value = parseFloat(document.getElementById('extInputVolume').value);
+
+        // Stereo panner
+        extInputPanner = audioContext.createStereoPanner();
+        extInputPanner.pan.value = parseFloat(document.getElementById('extInputPan').value);
+
+        // Analyser for VU meter
+        extInputAnalyser = audioContext.createAnalyser();
+        extInputAnalyser.fftSize = 1024;
+
+        // Monitor output (direct to speakers, off by default)
+        extMonitorGain = audioContext.createGain();
+        extMonitorGain.gain.value = document.getElementById('extMonitor').checked ? 0.8 : 0;
+
+        // Chain: source → gain → panner → limiter (into broadcast chain)
+        extInputSource.connect(extInputGain);
+        extInputGain.connect(extInputPanner);
+        extInputPanner.connect(limiterNode); // into the broadcast output chain
+        extInputPanner.connect(extInputAnalyser); // for metering
+
+        // Monitor path
+        extInputPanner.connect(extMonitorGain);
+        extMonitorGain.connect(audioContext.destination);
+
+        extConnected = true;
+
+        // Update UI
+        const btn = document.getElementById('extConnectBtn');
+        btn.textContent = 'DISCONNECT';
+        btn.classList.add('connected');
+        btn.style.borderColor = 'var(--red)';
+        btn.style.color = '#000';
+
+        document.getElementById('extInputToggle').textContent = 'ON';
+        document.getElementById('extInputToggle').classList.add('active');
+        document.getElementById('extInputStatus').style.display = 'block';
+
+        const select = document.getElementById('extInputDevice');
+        const deviceName = select.options[select.selectedIndex].text;
+        document.getElementById('extStatusText').textContent = 'Connected: ' + deviceName;
+
+        // Start metering
+        startExtMetering();
+
+        // Auto-reconnect if track ends (device unplugged)
+        extInputStream.getAudioTracks()[0].onended = () => {
+          disconnectExtInput();
+          document.getElementById('extStatusText').textContent = 'Device disconnected';
+          document.getElementById('extStatusText').style.color = 'var(--red)';
+        };
+
+      } catch (e) {
+        console.error('External input error:', e);
+        alert('Could not open external audio input: ' + e.message);
+      }
+    }
+
+    function disconnectExtInput() {
+      if (extInputStream) {
+        extInputStream.getTracks().forEach(t => t.stop());
+        extInputStream = null;
+      }
+      if (extInputSource) { try { extInputSource.disconnect(); } catch(e) {} extInputSource = null; }
+      if (extInputGain) { try { extInputGain.disconnect(); } catch(e) {} extInputGain = null; }
+      if (extInputPanner) { try { extInputPanner.disconnect(); } catch(e) {} extInputPanner = null; }
+      if (extInputAnalyser) { try { extInputAnalyser.disconnect(); } catch(e) {} extInputAnalyser = null; }
+      if (extMonitorGain) { try { extMonitorGain.disconnect(); } catch(e) {} extMonitorGain = null; }
+
+      extConnected = false;
+
+      const btn = document.getElementById('extConnectBtn');
+      btn.textContent = 'CONNECT';
+      btn.classList.remove('connected');
+      btn.style.borderColor = 'var(--green)';
+      btn.style.color = 'var(--green)';
+
+      document.getElementById('extInputToggle').textContent = 'OFF';
+      document.getElementById('extInputToggle').classList.remove('active');
+      document.getElementById('extInputStatus').style.display = 'none';
+    }
+
+    async function reconnectExtInput() {
+      if (!extConnected) return;
+      disconnectExtInput();
+      await toggleExtInput();
+    }
+
+    function updateExtVolume() {
+      const val = parseFloat(document.getElementById('extInputVolume').value);
+      document.getElementById('extVolVal').textContent = Math.round(val * 100) + '%';
+      if (extInputGain) extInputGain.gain.value = val;
+    }
+
+    function updateExtPan() {
+      const val = parseFloat(document.getElementById('extInputPan').value);
+      if (val === 0) document.getElementById('extPanVal').textContent = 'C';
+      else if (val < 0) document.getElementById('extPanVal').textContent = 'L' + Math.round(Math.abs(val) * 100);
+      else document.getElementById('extPanVal').textContent = 'R' + Math.round(val * 100);
+      if (extInputPanner) extInputPanner.pan.value = val;
+    }
+
+    function updateExtMonitor() {
+      const on = document.getElementById('extMonitor').checked;
+      if (extMonitorGain) extMonitorGain.gain.value = on ? 0.8 : 0;
+    }
+
+    function startExtMetering() {
+      if (!extInputAnalyser) return;
+      const buf = new Float32Array(extInputAnalyser.fftSize);
+
+      function meterLoop() {
+        if (!extConnected || !extInputAnalyser) return;
+        requestAnimationFrame(meterLoop);
+
+        extInputAnalyser.getFloatTimeDomainData(buf);
+        let max = 0;
+        for (let i = 0; i < buf.length; i++) max = Math.max(max, Math.abs(buf[i]));
+
+        const db = max > 0 ? 20 * Math.log10(max) : -Infinity;
+        extPeakLevel = Math.max(extPeakLevel * 0.95, max);
+
+        const pct = Math.min(max * 100, 100);
+        const peakPct = Math.min(extPeakLevel * 100, 100);
+        document.getElementById('vuExt').style.width = pct + '%';
+        document.getElementById('vuPeakExt').style.left = peakPct + '%';
+
+        const dbEl = document.getElementById('dbExt');
+        if (db === -Infinity) {
+          dbEl.textContent = '-∞';
+          dbEl.classList.remove('clip');
+        } else {
+          dbEl.textContent = db.toFixed(1);
+          dbEl.classList.toggle('clip', db > -1);
+        }
+      }
+      meterLoop();
     }
 
     // MOBILE TAB SWITCHING
