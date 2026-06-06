@@ -423,10 +423,13 @@
       const serverUrl = window.location.origin;
       socket = io(serverUrl, {
         reconnection: true,
-        reconnectionDelay: 1000,
-        reconnectionDelayMax: 5000,
-        reconnectionAttempts: 20,
-        transports: ['websocket', 'polling']
+        reconnectionDelay: 500,           // start reconnecting fast
+        reconnectionDelayMax: 3000,       // max 3s between retries
+        reconnectionAttempts: Infinity,   // NEVER stop trying
+        timeout: 30000,                   // 30s connection timeout
+        transports: ['websocket', 'polling'],
+        upgrade: true,
+        forceNew: false
       });
 
       socket.on('connect', () => {
@@ -438,20 +441,34 @@
         document.getElementById('badge').className = 'station-badge connected';
         document.getElementById('connectionError').classList.remove('active');
         document.getElementById('playerArea').style.display = 'flex';
+
+        // If was listening before disconnect, resume
+        if (isListening) {
+          nextPlayTime = 0;
+          document.getElementById('statusText').textContent = 'Reconnected — resuming...';
+        }
       });
 
-      socket.on('disconnect', () => {
-        document.getElementById('statusDot').className = 'status-dot';
-        document.getElementById('statusText').textContent = 'Disconnected — reconnecting...';
-        document.getElementById('badge').textContent = 'OFFLINE';
-        document.getElementById('badge').className = 'station-badge';
+      socket.on('disconnect', (reason) => {
+        document.getElementById('statusDot').className = 'status-dot error';
+        document.getElementById('statusText').textContent = 'Connection lost — reconnecting...';
+        // Don't reset badge — keep the state so listener auto-resumes
+      });
+
+      socket.on('reconnect', (attemptNumber) => {
+        document.getElementById('statusText').textContent = `Reconnected (attempt ${attemptNumber})`;
+        nextPlayTime = 0; // reset audio buffer
+      });
+
+      socket.on('reconnect_attempt', (attemptNumber) => {
+        document.getElementById('statusText').textContent = `Reconnecting... (${attemptNumber})`;
       });
 
       socket.on('connect_error', (err) => {
         reconnectAttempts++;
         document.getElementById('statusDot').className = 'status-dot error';
-        document.getElementById('statusText').textContent = `Connection failed (attempt ${reconnectAttempts})`;
-        if (reconnectAttempts >= 5) {
+        document.getElementById('statusText').textContent = `Reconnecting... (${reconnectAttempts})`;
+        if (reconnectAttempts >= 10) {
           document.getElementById('connectionError').classList.add('active');
         }
       });
