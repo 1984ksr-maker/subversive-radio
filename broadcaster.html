@@ -1112,16 +1112,39 @@
               </div>
             </div>
 
-            <!-- URL SOURCE -->
+            <!-- URL / YOUTUBE SOURCE -->
             <div class="music-source" id="musicSourceUrl" style="display:none">
               <div style="padding:8px 0">
                 <div class="control-row">
-                  <input type="text" id="streamUrlInput" placeholder="Paste audio URL (.mp3, stream, radio)..." style="flex:1">
+                  <input type="text" id="streamUrlInput" placeholder="Paste YouTube URL or audio link..." style="flex:1">
                 </div>
-                <button class="btn" onclick="loadStreamUrl()" style="border-color:var(--amber);color:var(--amber);margin-top:6px">LOAD & PLAY</button>
-                <div style="font-size:9px;color:var(--text-dim);margin-top:6px;line-height:1.5">
-                  Works with direct audio URLs, internet radio streams, .mp3 links
+                <button class="btn" onclick="loadFromUrl()" style="border-color:var(--amber);color:var(--amber);margin-top:6px">LOAD & PLAY</button>
+              </div>
+              <div id="youtubePlayerContainer" style="display:none;margin-top:8px">
+                <div style="position:relative;width:100%;padding-bottom:56.25%;background:#000;border-radius:6px;overflow:hidden">
+                  <iframe id="youtubeIframe" style="position:absolute;top:0;left:0;width:100%;height:100%;border:none" allow="autoplay"></iframe>
                 </div>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px">
+                  <span style="font-size:10px;color:var(--amber)" id="ytStatus">YouTube playing</span>
+                  <button class="btn" onclick="closeYoutube()" style="width:auto;padding:4px 12px;margin:0;border-color:var(--red);color:var(--red)">CLOSE</button>
+                </div>
+                <div style="margin-top:8px;padding:10px;background:var(--bg);border:1px solid #333;border-radius:4px">
+                  <div style="font-size:10px;color:var(--green);margin-bottom:4px">📡 To send this audio to your broadcast:</div>
+                  <div style="font-size:9px;color:var(--text-dim);line-height:1.6">
+                    1. Switch to <strong>🎵 CAPTURE APP</strong> tab above<br>
+                    2. Click <strong>"CAPTURE SPOTIFY / YOUTUBE"</strong><br>
+                    3. Select <strong>THIS browser tab</strong><br>
+                    4. ✅ Check <strong>"Share audio"</strong> checkbox<br>
+                    YouTube audio goes directly into your broadcast!
+                  </div>
+                  <button class="btn" onclick="showMusicSource('capture');startAppCapture()" style="border-color:var(--green);color:var(--green);margin-top:8px">🎵 CAPTURE THIS TAB NOW</button>
+                </div>
+              </div>
+              <div id="directAudioStatus" style="display:none;margin-top:8px">
+                <div style="font-size:10px;color:var(--green)">✓ Audio loaded into playlist</div>
+              </div>
+              <div style="font-size:9px;color:var(--text-dim);margin-top:8px;line-height:1.5">
+                <strong>Supports:</strong> YouTube links, direct .mp3/.ogg URLs, internet radio streams
               </div>
             </div>
             <div class="music-playlist" id="musicPlaylist"></div>
@@ -2285,11 +2308,54 @@
       document.getElementById('captureStatus').style.color = 'var(--text-dim)';
     }
 
-    function loadStreamUrl() {
+    function extractYoutubeId(url) {
+      const patterns = [
+        /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/v\/)([a-zA-Z0-9_-]{11})/,
+        /youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/
+      ];
+      for (const p of patterns) {
+        const match = url.match(p);
+        if (match) return match[1];
+      }
+      return null;
+    }
+
+    function loadFromUrl() {
       const url = document.getElementById('streamUrlInput').value.trim();
       if (!url) return;
 
-      // Add as a playlist item
+      const ytId = extractYoutubeId(url);
+      if (ytId) {
+        // YouTube — embed the player
+        loadYoutube(ytId);
+      } else {
+        // Direct audio URL — add to playlist
+        loadStreamUrl(url);
+      }
+    }
+
+    function loadYoutube(videoId) {
+      const container = document.getElementById('youtubePlayerContainer');
+      const iframe = document.getElementById('youtubeIframe');
+      iframe.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&enablejsapi=1`;
+      container.style.display = 'block';
+      document.getElementById('ytStatus').textContent = 'YouTube playing — capture this tab to broadcast';
+      document.getElementById('directAudioStatus').style.display = 'none';
+      document.getElementById('streamUrlInput').value = '';
+    }
+
+    function closeYoutube() {
+      const iframe = document.getElementById('youtubeIframe');
+      iframe.src = '';
+      document.getElementById('youtubePlayerContainer').style.display = 'none';
+    }
+
+    function loadStreamUrl(url) {
+      if (!url) {
+        url = document.getElementById('streamUrlInput').value.trim();
+        if (!url) return;
+      }
+
       playlist.push({
         name: url.split('/').pop().split('?')[0] || 'Stream',
         url: url,
@@ -2299,6 +2365,9 @@
       loadTrack(playlist.length - 1);
       playMusic();
       document.getElementById('streamUrlInput').value = '';
+      document.getElementById('directAudioStatus').style.display = 'block';
+      document.getElementById('youtubePlayerContainer').style.display = 'none';
+      setTimeout(() => { document.getElementById('directAudioStatus').style.display = 'none'; }, 3000);
     }
 
     // VOICE EFFECTS
