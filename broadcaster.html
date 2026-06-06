@@ -629,6 +629,72 @@
     .status-dot.connected { background: var(--green); }
     .status-dot.live { background: var(--red); animation: pulse 2s infinite; }
 
+    /* MUSIC PLAYER */
+    .music-dropzone {
+      width: 100%;
+      padding: 20px;
+      border: 2px dashed #333;
+      border-radius: 8px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .music-dropzone:hover, .music-dropzone.dragover {
+      border-color: var(--amber);
+      background: rgba(255, 170, 0, 0.05);
+    }
+    .dropzone-text { font-size: 11px; color: var(--text-dim); letter-spacing: 1px; }
+    .dropzone-formats { font-size: 9px; color: #444; margin-top: 4px; }
+    .music-playlist {
+      max-height: 120px;
+      overflow-y: auto;
+      margin-top: 8px;
+    }
+    .playlist-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      margin-bottom: 4px;
+      background: var(--surface2);
+      border: 1px solid #222;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-size: 11px;
+    }
+    .playlist-item:hover { border-color: #444; }
+    .playlist-item.playing { border-color: var(--amber); color: var(--amber); }
+    .playlist-item .track-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .playlist-item .track-dur { font-size: 9px; color: var(--text-dim); }
+    .playlist-item .track-remove {
+      width: 20px; height: 20px; border: none; background: none;
+      color: var(--text-dim); cursor: pointer; font-size: 12px;
+    }
+    .playlist-item .track-remove:hover { color: var(--red); }
+    .music-now-playing { margin-top: 10px; }
+    .now-playing-info { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+    .now-playing-title { font-size: 11px; font-weight: bold; color: var(--amber); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+    .now-playing-time { font-size: 10px; color: var(--text-dim); min-width: 80px; text-align: right; }
+    .music-progress-bar {
+      width: 100%; height: 6px; background: #222; border-radius: 3px;
+      cursor: pointer; position: relative; margin-bottom: 8px;
+    }
+    .music-progress-fill {
+      height: 100%; background: var(--amber); border-radius: 3px;
+      width: 0%; transition: width 0.2s;
+    }
+    .music-controls { display: flex; justify-content: center; gap: 8px; }
+    .music-btn {
+      width: 36px; height: 36px; border: 1px solid #333; border-radius: 50%;
+      background: var(--surface2); color: var(--text); font-size: 14px;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      transition: all 0.2s;
+    }
+    .music-btn:hover { border-color: var(--amber); color: var(--amber); }
+    .music-play-btn { width: 44px; height: 44px; font-size: 18px; }
+    .music-btn.active { border-color: var(--amber); color: var(--amber); background: rgba(255,170,0,0.1); }
+
     /* VOICE PRESETS */
     .voice-preset {
       flex: 0 0 auto;
@@ -995,6 +1061,48 @@
               <label>Delay</label>
               <input type="range" id="voiceDelay" min="0" max="0.5" step="0.01" value="0" oninput="updateVoiceDelay()">
               <span class="value" id="voiceDelayVal">0 ms</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- MUSIC PLAYER -->
+        <div class="panel-section">
+          <h2>Music Player</h2>
+          <div class="music-player">
+            <div class="music-dropzone" id="musicDropzone" onclick="document.getElementById('musicFileInput').click()" ondrop="handleMusicDrop(event)" ondragover="event.preventDefault();this.classList.add('dragover')" ondragleave="this.classList.remove('dragover')">
+              <input type="file" id="musicFileInput" accept="audio/*" multiple style="display:none" onchange="handleMusicFiles(this.files)">
+              <div class="dropzone-text">Drop audio files here or click to browse</div>
+              <div class="dropzone-formats">MP3, WAV, OGG, FLAC, M4A</div>
+            </div>
+            <div class="music-playlist" id="musicPlaylist"></div>
+            <div class="music-now-playing" id="musicNowPlaying" style="display:none">
+              <div class="now-playing-info">
+                <div class="now-playing-title" id="nowPlayingTitle">—</div>
+                <div class="now-playing-time"><span id="musicCurrentTime">0:00</span> / <span id="musicDuration">0:00</span></div>
+              </div>
+              <div class="music-progress-bar" onclick="seekMusic(event)">
+                <div class="music-progress-fill" id="musicProgressFill"></div>
+              </div>
+              <div class="music-controls">
+                <button class="music-btn" onclick="prevTrack()">⏮</button>
+                <button class="music-btn music-play-btn" id="musicPlayBtn" onclick="toggleMusicPlay()">▶</button>
+                <button class="music-btn" onclick="nextTrack()">⏭</button>
+                <button class="music-btn" id="musicLoopBtn" onclick="toggleLoop()" title="Loop">🔁</button>
+              </div>
+            </div>
+            <div class="control-row" style="margin-top:10px">
+              <label>Music Vol</label>
+              <input type="range" id="musicVolume" min="0" max="1.5" step="0.01" value="0.5" oninput="updateMusicVol()">
+              <span class="value" id="musicVolVal">50%</span>
+            </div>
+            <div class="control-row">
+              <label>Mic Vol</label>
+              <input type="range" id="micMixVol" min="0" max="1.5" step="0.01" value="1.0" oninput="updateMicMixVol()">
+              <span class="value" id="micMixVolVal">100%</span>
+            </div>
+            <div class="toggle-row" style="margin-top:6px">
+              <label>Capture System Audio</label>
+              <div class="toggle" id="toggleSystemAudio" onclick="toggleSystemAudio()"></div>
             </div>
           </div>
         </div>
@@ -1819,6 +1927,246 @@
     }).catch(() => {});
 
     drawEQCurve();
+
+    // MUSIC PLAYER
+    let playlist = [];
+    let currentTrackIndex = -1;
+    let musicAudioElement = null;
+    let musicSourceNode = null;
+    let musicGainNode = null;
+    let micMixGainNode = null;
+    let isLooping = false;
+    let systemAudioStream = null;
+    let systemAudioSource = null;
+    let systemAudioGain = null;
+
+    function handleMusicDrop(e) {
+      e.preventDefault();
+      e.target.closest('.music-dropzone').classList.remove('dragover');
+      handleMusicFiles(e.dataTransfer.files);
+    }
+
+    function handleMusicFiles(files) {
+      for (const file of files) {
+        if (!file.type.startsWith('audio/')) continue;
+        const url = URL.createObjectURL(file);
+        playlist.push({
+          name: file.name.replace(/\.[^.]+$/, ''),
+          url: url,
+          file: file
+        });
+      }
+      renderPlaylist();
+      if (playlist.length > 0 && currentTrackIndex === -1) {
+        loadTrack(0);
+      }
+    }
+
+    function renderPlaylist() {
+      const el = document.getElementById('musicPlaylist');
+      if (playlist.length === 0) {
+        el.innerHTML = '';
+        return;
+      }
+      el.innerHTML = playlist.map((t, i) => `
+        <div class="playlist-item ${i === currentTrackIndex ? 'playing' : ''}" onclick="loadTrack(${i}); playMusic()">
+          <span class="track-name">${t.name}</span>
+          <button class="track-remove" onclick="event.stopPropagation(); removeTrack(${i})">✕</button>
+        </div>
+      `).join('');
+    }
+
+    function removeTrack(index) {
+      if (index === currentTrackIndex) {
+        stopMusic();
+        currentTrackIndex = -1;
+      } else if (index < currentTrackIndex) {
+        currentTrackIndex--;
+      }
+      URL.revokeObjectURL(playlist[index].url);
+      playlist.splice(index, 1);
+      renderPlaylist();
+      if (playlist.length === 0) {
+        document.getElementById('musicNowPlaying').style.display = 'none';
+      }
+    }
+
+    function loadTrack(index) {
+      if (index < 0 || index >= playlist.length) return;
+      currentTrackIndex = index;
+
+      if (!musicAudioElement) {
+        musicAudioElement = new Audio();
+        musicAudioElement.addEventListener('timeupdate', updateMusicProgress);
+        musicAudioElement.addEventListener('ended', onTrackEnded);
+        musicAudioElement.addEventListener('loadedmetadata', () => {
+          document.getElementById('musicDuration').textContent = formatTime(musicAudioElement.duration);
+        });
+      }
+
+      musicAudioElement.src = playlist[index].url;
+      musicAudioElement.load();
+      document.getElementById('nowPlayingTitle').textContent = playlist[index].name;
+      document.getElementById('musicNowPlaying').style.display = 'block';
+      document.getElementById('musicCurrentTime').textContent = '0:00';
+      document.getElementById('musicProgressFill').style.width = '0%';
+      renderPlaylist();
+
+      // Connect to audio chain if audio context exists
+      connectMusicToChain();
+    }
+
+    function connectMusicToChain() {
+      if (!audioContext || !musicAudioElement) return;
+
+      // Create music source node (only once per element)
+      if (!musicSourceNode) {
+        musicSourceNode = audioContext.createMediaElementSource(musicAudioElement);
+        musicGainNode = audioContext.createGain();
+        musicGainNode.gain.value = parseFloat(document.getElementById('musicVolume').value);
+        musicSourceNode.connect(musicGainNode);
+        // Connect music to the output chain (after limiter, before output gain)
+        musicGainNode.connect(limiterNode);
+      }
+    }
+
+    function playMusic() {
+      if (!musicAudioElement || currentTrackIndex === -1) return;
+      if (!audioContext) return;
+      if (audioContext.state === 'suspended') audioContext.resume();
+      connectMusicToChain();
+      musicAudioElement.play().catch(() => {});
+      document.getElementById('musicPlayBtn').textContent = '⏸';
+    }
+
+    function stopMusic() {
+      if (!musicAudioElement) return;
+      musicAudioElement.pause();
+      musicAudioElement.currentTime = 0;
+      document.getElementById('musicPlayBtn').textContent = '▶';
+    }
+
+    function toggleMusicPlay() {
+      if (!musicAudioElement || currentTrackIndex === -1) return;
+      if (musicAudioElement.paused) {
+        playMusic();
+      } else {
+        musicAudioElement.pause();
+        document.getElementById('musicPlayBtn').textContent = '▶';
+      }
+    }
+
+    function nextTrack() {
+      if (playlist.length === 0) return;
+      const next = (currentTrackIndex + 1) % playlist.length;
+      loadTrack(next);
+      playMusic();
+    }
+
+    function prevTrack() {
+      if (playlist.length === 0) return;
+      if (musicAudioElement && musicAudioElement.currentTime > 3) {
+        musicAudioElement.currentTime = 0;
+        return;
+      }
+      const prev = (currentTrackIndex - 1 + playlist.length) % playlist.length;
+      loadTrack(prev);
+      playMusic();
+    }
+
+    function onTrackEnded() {
+      if (isLooping) {
+        musicAudioElement.currentTime = 0;
+        musicAudioElement.play();
+      } else if (currentTrackIndex < playlist.length - 1) {
+        nextTrack();
+      } else {
+        document.getElementById('musicPlayBtn').textContent = '▶';
+      }
+    }
+
+    function toggleLoop() {
+      isLooping = !isLooping;
+      document.getElementById('musicLoopBtn').classList.toggle('active', isLooping);
+    }
+
+    function updateMusicProgress() {
+      if (!musicAudioElement || !musicAudioElement.duration) return;
+      const pct = (musicAudioElement.currentTime / musicAudioElement.duration) * 100;
+      document.getElementById('musicProgressFill').style.width = pct + '%';
+      document.getElementById('musicCurrentTime').textContent = formatTime(musicAudioElement.currentTime);
+    }
+
+    function seekMusic(e) {
+      if (!musicAudioElement || !musicAudioElement.duration) return;
+      const rect = e.currentTarget.getBoundingClientRect();
+      const pct = (e.clientX - rect.left) / rect.width;
+      musicAudioElement.currentTime = pct * musicAudioElement.duration;
+    }
+
+    function formatTime(sec) {
+      const m = Math.floor(sec / 60);
+      const s = Math.floor(sec % 60);
+      return m + ':' + String(s).padStart(2, '0');
+    }
+
+    function updateMusicVol() {
+      const val = parseFloat(document.getElementById('musicVolume').value);
+      document.getElementById('musicVolVal').textContent = Math.round(val * 100) + '%';
+      if (musicGainNode) musicGainNode.gain.value = val;
+    }
+
+    function updateMicMixVol() {
+      const val = parseFloat(document.getElementById('micMixVol').value);
+      document.getElementById('micMixVolVal').textContent = Math.round(val * 100) + '%';
+      // Adjust the input gain to act as mic mix
+      if (gainNode) {
+        const baseGain = dbToGain(parseFloat(document.getElementById('inputGain').value));
+        gainNode.gain.value = baseGain * val;
+      }
+    }
+
+    async function toggleSystemAudio() {
+      const toggle = document.getElementById('toggleSystemAudio');
+      toggle.classList.toggle('on');
+      const isOn = toggle.classList.contains('on');
+
+      if (isOn) {
+        try {
+          // Capture system audio via screen share (audio only)
+          systemAudioStream = await navigator.mediaDevices.getDisplayMedia({
+            video: true, // required to get audio
+            audio: true
+          });
+          // Stop the video track — we only want audio
+          systemAudioStream.getVideoTracks().forEach(t => t.stop());
+
+          if (audioContext && systemAudioStream.getAudioTracks().length > 0) {
+            systemAudioSource = audioContext.createMediaStreamSource(systemAudioStream);
+            systemAudioGain = audioContext.createGain();
+            systemAudioGain.gain.value = parseFloat(document.getElementById('musicVolume').value);
+            systemAudioSource.connect(systemAudioGain);
+            systemAudioGain.connect(limiterNode);
+          }
+
+          systemAudioStream.getAudioTracks()[0].onended = () => {
+            toggle.classList.remove('on');
+            cleanupSystemAudio();
+          };
+        } catch (e) {
+          toggle.classList.remove('on');
+          console.error('System audio capture failed:', e);
+        }
+      } else {
+        cleanupSystemAudio();
+      }
+    }
+
+    function cleanupSystemAudio() {
+      if (systemAudioSource) { try { systemAudioSource.disconnect(); } catch(e) {} systemAudioSource = null; }
+      if (systemAudioGain) { try { systemAudioGain.disconnect(); } catch(e) {} systemAudioGain = null; }
+      if (systemAudioStream) { systemAudioStream.getTracks().forEach(t => t.stop()); systemAudioStream = null; }
+    }
 
     // VOICE EFFECTS
     let voiceEnabled = false;
