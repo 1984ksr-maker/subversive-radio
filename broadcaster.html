@@ -1104,6 +1104,19 @@
               <label>Capture System Audio</label>
               <div class="toggle" id="toggleSystemAudio" onclick="toggleSystemAudio()"></div>
             </div>
+            <div style="font-size:9px;color:var(--text-dim);margin-top:4px;line-height:1.5">
+              Captures Spotify, YouTube, or any app audio playing on your computer
+            </div>
+            <div style="margin-top:12px;border-top:1px solid #222;padding-top:12px">
+              <div class="control-row">
+                <label>URL</label>
+                <input type="text" id="streamUrlInput" placeholder="Paste audio or stream URL..." style="flex:1">
+                <button class="btn" style="width:auto;margin:0;padding:6px 12px" onclick="loadStreamUrl()">LOAD</button>
+              </div>
+              <div style="font-size:9px;color:var(--text-dim);margin-top:4px;line-height:1.5">
+                Direct audio URLs (.mp3, .ogg, internet radio streams)
+              </div>
+            </div>
           </div>
         </div>
 
@@ -2166,6 +2179,22 @@
       if (systemAudioSource) { try { systemAudioSource.disconnect(); } catch(e) {} systemAudioSource = null; }
       if (systemAudioGain) { try { systemAudioGain.disconnect(); } catch(e) {} systemAudioGain = null; }
       if (systemAudioStream) { systemAudioStream.getTracks().forEach(t => t.stop()); systemAudioStream = null; }
+    }
+
+    function loadStreamUrl() {
+      const url = document.getElementById('streamUrlInput').value.trim();
+      if (!url) return;
+
+      // Add as a playlist item
+      playlist.push({
+        name: url.split('/').pop().split('?')[0] || 'Stream',
+        url: url,
+        file: null
+      });
+      renderPlaylist();
+      loadTrack(playlist.length - 1);
+      playMusic();
+      document.getElementById('streamUrlInput').value = '';
     }
 
     // VOICE EFFECTS
