@@ -957,9 +957,11 @@
                 </div>
               </div>
 
-              <!-- MIC CONTROLS (hidden in external-only mode) -->
-              <div id="micControls" style="width:100%;display:flex;flex-direction:column;gap:6px">
-                <button class="mic-mute-btn" id="micMuteBtn" onclick="toggleMicMute()">🎙️ MIC ON</button>
+              <!-- MIC MUTE — always visible -->
+              <button class="mic-mute-btn" id="micMuteBtn" onclick="toggleMicMute()">🎙️ MIC ON</button>
+
+              <!-- MIC DEVICE SELECTOR (hidden in external-only mode) -->
+              <div id="micControls" style="width:100%">
                 <select class="input-select" id="inputDevice" onchange="switchInput()">
                   <option value="">Loading inputs...</option>
                 </select>
@@ -1498,19 +1500,23 @@
         b.classList.toggle('active', b.dataset.mode === mode);
       });
 
-      // Show/hide mic controls
+      // Show/hide mic device selector & external quick controls
       const micControls = document.getElementById('micControls');
       const extQuick = document.getElementById('extQuickControls');
+      const micMuteBtn = document.getElementById('micMuteBtn');
 
       if (mode === 'mic') {
-        micControls.style.display = 'flex';
+        micControls.style.display = 'block';
         extQuick.style.display = 'none';
+        micMuteBtn.style.display = 'block';
       } else if (mode === 'external') {
         micControls.style.display = 'none';
         extQuick.style.display = 'block';
+        micMuteBtn.style.display = 'block';
       } else { // both
-        micControls.style.display = 'flex';
+        micControls.style.display = 'block';
         extQuick.style.display = 'block';
+        micMuteBtn.style.display = 'block';
       }
 
       // If audio already initialized and switching to external-only, mute mic
