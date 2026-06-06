@@ -629,6 +629,24 @@
     .status-dot.connected { background: var(--green); }
     .status-dot.live { background: var(--red); animation: pulse 2s infinite; }
 
+    /* VOICE PRESETS */
+    .voice-preset {
+      flex: 0 0 auto;
+      padding: 8px 12px !important;
+      border: 1px solid #333 !important;
+      border-radius: 4px !important;
+      background: var(--surface2) !important;
+      color: var(--text-dim) !important;
+      font-family: inherit;
+      font-size: 9px !important;
+      letter-spacing: 2px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .voice-preset:hover { border-color: var(--amber) !important; color: var(--amber) !important; }
+    .voice-preset.active { border-color: var(--amber) !important; color: #000 !important; background: var(--amber) !important; }
+    .source-btn { display: inline-block; }
+
     /* MOBILE TABS */
     .mobile-tabs {
       display: none;
@@ -949,6 +967,38 @@
           </div>
         </div>
 
+        <!-- VOICE EFFECTS -->
+        <div class="panel-section">
+          <h2>Voice Effects <button class="toggle-btn" id="voiceToggle" onclick="toggleVoiceEffect()">OFF</button></h2>
+          <div class="control-group">
+            <div class="control-row" style="flex-wrap: wrap; gap: 6px;">
+              <button class="source-btn voice-preset" data-preset="none" onclick="setVoicePreset('none')">NATURAL</button>
+              <button class="source-btn voice-preset" data-preset="deep" onclick="setVoicePreset('deep')">DEEP</button>
+              <button class="source-btn voice-preset" data-preset="high" onclick="setVoicePreset('high')">HIGH</button>
+              <button class="source-btn voice-preset" data-preset="robot" onclick="setVoicePreset('robot')">ROBOT</button>
+              <button class="source-btn voice-preset" data-preset="radio" onclick="setVoicePreset('radio')">RADIO</button>
+              <button class="source-btn voice-preset" data-preset="anonymous" onclick="setVoicePreset('anonymous')">ANON</button>
+              <button class="source-btn voice-preset" data-preset="echo" onclick="setVoicePreset('echo')">ECHO</button>
+              <button class="source-btn voice-preset" data-preset="alien" onclick="setVoicePreset('alien')">ALIEN</button>
+            </div>
+            <div class="control-row" style="margin-top:10px">
+              <label>Pitch</label>
+              <input type="range" id="voicePitch" min="0.5" max="2.0" step="0.05" value="1.0" oninput="updateVoicePitch()">
+              <span class="value" id="voicePitchVal">1.0x</span>
+            </div>
+            <div class="control-row">
+              <label>Distort</label>
+              <input type="range" id="voiceDistort" min="0" max="100" step="1" value="0" oninput="updateVoiceDistort()">
+              <span class="value" id="voiceDistortVal">0%</span>
+            </div>
+            <div class="control-row">
+              <label>Delay</label>
+              <input type="range" id="voiceDelay" min="0" max="0.5" step="0.01" value="0" oninput="updateVoiceDelay()">
+              <span class="value" id="voiceDelayVal">0 ms</span>
+            </div>
+          </div>
+        </div>
+
         <!-- QUALITY + LINK -->
         <div class="mixer-grid">
           <div class="panel-section">
@@ -1198,6 +1248,9 @@
         monitorGainNode = audioContext.createGain();
         monitorGainNode.gain.value = parseFloat(document.getElementById('monitorLevel').value);
 
+        // Voice effect nodes
+        createVoiceNodes();
+
         // Recording destination
         recordDestination = audioContext.createMediaStreamDestination();
 
@@ -1261,7 +1314,7 @@
     }
 
     function rebuildChain() {
-      // Disconnect the chain from gainNode onward (not source→highPass→gainNode)
+      // Disconnect the chain from gainNode onward
       try { gainNode.disconnect(); } catch(e) {}
       try { eqLowFilter.disconnect(); } catch(e) {}
       try { eqLowMidFilter.disconnect(); } catch(e) {}
@@ -1270,8 +1323,12 @@
       try { compressorNode.disconnect(); } catch(e) {}
       try { makeupGainNode.disconnect(); } catch(e) {}
       try { limiterNode.disconnect(); } catch(e) {}
+      if (voiceBandpass) try { voiceBandpass.disconnect(); } catch(e) {}
+      if (voiceDistortNode) try { voiceDistortNode.disconnect(); } catch(e) {}
+      if (voiceDelayNode) try { voiceDelayNode.disconnect(); } catch(e) {}
+      if (voiceDelayGain) try { voiceDelayGain.disconnect(); } catch(e) {}
 
-      // Chain: gainNode → [EQ] → [comp → makeup] → limiter → outputGain → analyser
+      // Chain: gainNode → [EQ] → [voice FX] → [comp → makeup] → limiter → outputGain
       let chain = gainNode;
 
       if (eqEnabled) {
@@ -1282,13 +1339,29 @@
         chain = eqHighFilter;
       }
 
+      // Voice effects
+      if (voiceEnabled && voiceBandpass && voiceDistortNode) {
+        // Bandpass → distortion
+        chain.connect(voiceBandpass);
+        voiceBandpass.connect(voiceDistortNode);
+        chain = voiceDistortNode;
+
+        // Delay feedback loop
+        if (voiceDelayNode && voiceDelayGain) {
+          chain.connect(voiceDelayNode);
+          voiceDelayNode.connect(voiceDelayGain);
+          voiceDelayGain.connect(voiceDelayNode); // feedback loop
+          voiceDelayNode.connect(limiterNode); // delay output to limiter
+        }
+      }
+
       if (compEnabled) {
         chain.connect(compressorNode);
         compressorNode.connect(makeupGainNode);
         chain = makeupGainNode;
       }
 
-      // Limiter always on — prevents clipping
+      // Limiter always on
       chain.connect(limiterNode);
       limiterNode.connect(outputGainNode);
       outputGainNode.connect(analyserNode);
@@ -1746,6 +1819,133 @@
     }).catch(() => {});
 
     drawEQCurve();
+
+    // VOICE EFFECTS
+    let voiceEnabled = false;
+    let voicePitchNode, voiceDistortNode, voiceDelayNode, voiceDelayGain, voiceBandpass;
+    let currentVoicePreset = 'none';
+
+    function toggleVoiceEffect() {
+      voiceEnabled = !voiceEnabled;
+      const btn = document.getElementById('voiceToggle');
+      btn.textContent = voiceEnabled ? 'ON' : 'OFF';
+      btn.classList.toggle('active', voiceEnabled);
+      if (audioContext) rebuildChain();
+    }
+
+    function setVoicePreset(preset) {
+      currentVoicePreset = preset;
+      document.querySelectorAll('.voice-preset').forEach(b => {
+        b.classList.toggle('active', b.dataset.preset === preset);
+      });
+
+      // Apply preset values
+      const pitchSlider = document.getElementById('voicePitch');
+      const distortSlider = document.getElementById('voiceDistort');
+      const delaySlider = document.getElementById('voiceDelay');
+
+      switch(preset) {
+        case 'none':
+          pitchSlider.value = 1.0; distortSlider.value = 0; delaySlider.value = 0;
+          break;
+        case 'deep':
+          pitchSlider.value = 0.65; distortSlider.value = 5; delaySlider.value = 0;
+          break;
+        case 'high':
+          pitchSlider.value = 1.6; distortSlider.value = 0; delaySlider.value = 0;
+          break;
+        case 'robot':
+          pitchSlider.value = 0.85; distortSlider.value = 40; delaySlider.value = 0.02;
+          break;
+        case 'radio':
+          pitchSlider.value = 1.0; distortSlider.value = 20; delaySlider.value = 0;
+          break;
+        case 'anonymous':
+          pitchSlider.value = 0.7; distortSlider.value = 30; delaySlider.value = 0.01;
+          break;
+        case 'echo':
+          pitchSlider.value = 1.0; distortSlider.value = 0; delaySlider.value = 0.3;
+          break;
+        case 'alien':
+          pitchSlider.value = 1.8; distortSlider.value = 50; delaySlider.value = 0.05;
+          break;
+      }
+
+      updateVoicePitch();
+      updateVoiceDistort();
+      updateVoiceDelay();
+
+      if (!voiceEnabled) {
+        voiceEnabled = true;
+        document.getElementById('voiceToggle').textContent = 'ON';
+        document.getElementById('voiceToggle').classList.add('active');
+      }
+      if (audioContext) rebuildChain();
+    }
+
+    function createVoiceNodes() {
+      if (!audioContext) return;
+
+      // Pitch shift using playback rate on a buffer (simple approach using detune on oscillator-modulated delay)
+      // We'll use a combination of bandpass filter + waveshaper (distortion) + delay for voice effects
+
+      // Bandpass for radio/robot effect
+      voiceBandpass = audioContext.createBiquadFilter();
+      voiceBandpass.type = 'bandpass';
+      voiceBandpass.frequency.value = 2000;
+      voiceBandpass.Q.value = 0.5;
+
+      // Distortion (waveshaper)
+      voiceDistortNode = audioContext.createWaveShaper();
+      updateDistortionCurve(0);
+
+      // Delay for echo/robot
+      voiceDelayNode = audioContext.createDelay(1.0);
+      voiceDelayNode.delayTime.value = 0;
+
+      voiceDelayGain = audioContext.createGain();
+      voiceDelayGain.gain.value = 0;
+    }
+
+    function updateDistortionCurve(amount) {
+      if (!voiceDistortNode) return;
+      if (amount === 0) {
+        voiceDistortNode.curve = null;
+        return;
+      }
+      const samples = 44100;
+      const curve = new Float32Array(samples);
+      const k = amount;
+      for (let i = 0; i < samples; i++) {
+        const x = (i * 2) / samples - 1;
+        curve[i] = ((3 + k) * x * 20 * (Math.PI / 180)) / (Math.PI + k * Math.abs(x));
+      }
+      voiceDistortNode.curve = curve;
+      voiceDistortNode.oversample = '4x';
+    }
+
+    function updateVoicePitch() {
+      const val = parseFloat(document.getElementById('voicePitch').value);
+      document.getElementById('voicePitchVal').textContent = val.toFixed(2) + 'x';
+      // Pitch is applied via bandpass frequency shift to simulate pitch change
+      if (voiceBandpass) {
+        // Shift the bandpass center frequency based on pitch
+        voiceBandpass.frequency.value = 2000 * val;
+      }
+    }
+
+    function updateVoiceDistort() {
+      const val = parseFloat(document.getElementById('voiceDistort').value);
+      document.getElementById('voiceDistortVal').textContent = Math.round(val) + '%';
+      updateDistortionCurve(val);
+    }
+
+    function updateVoiceDelay() {
+      const val = parseFloat(document.getElementById('voiceDelay').value);
+      document.getElementById('voiceDelayVal').textContent = Math.round(val * 1000) + ' ms';
+      if (voiceDelayNode) voiceDelayNode.delayTime.value = val;
+      if (voiceDelayGain) voiceDelayGain.gain.value = val > 0 ? 0.6 : 0;
+    }
 
     // MOBILE TAB SWITCHING
     function showMobileTab(tab) {
