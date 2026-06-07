@@ -9,6 +9,7 @@
   <meta name="theme-color" content="#0a0a0a">
   <link rel="manifest" href="/manifest-broadcaster.json">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
   <title>Subversive Radio — Broadcaster</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -1186,39 +1187,30 @@
               </div>
             </div>
 
-            <!-- URL / YOUTUBE SOURCE -->
+            <!-- URL / STREAM SOURCE -->
             <div class="music-source" id="musicSourceUrl" style="display:none">
               <div style="padding:8px 0">
                 <div class="control-row">
-                  <input type="text" id="streamUrlInput" placeholder="Paste YouTube URL or audio link..." style="flex:1">
+                  <input type="text" id="streamUrlInput" placeholder="Paste audio URL (.mp3, .ogg, stream)..." style="flex:1">
                 </div>
                 <button class="btn" onclick="loadFromUrl()" style="border-color:var(--amber);color:var(--amber);margin-top:6px">LOAD & PLAY</button>
-              </div>
-              <div id="youtubePlayerContainer" style="display:none;margin-top:8px">
-                <div style="position:relative;width:100%;padding-bottom:56.25%;background:#000;border-radius:6px;overflow:hidden">
-                  <iframe id="youtubeIframe" style="position:absolute;top:0;left:0;width:100%;height:100%;border:none" allow="autoplay"></iframe>
-                </div>
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px">
-                  <span style="font-size:10px;color:var(--amber)" id="ytStatus">YouTube playing</span>
-                  <button class="btn" onclick="closeYoutube()" style="width:auto;padding:4px 12px;margin:0;border-color:var(--red);color:var(--red)">CLOSE</button>
-                </div>
-                <div style="margin-top:8px;padding:10px;background:var(--bg);border:1px solid #333;border-radius:4px">
-                  <div style="font-size:10px;color:var(--green);margin-bottom:4px">📡 To send this audio to your broadcast:</div>
-                  <div style="font-size:9px;color:var(--text-dim);line-height:1.6">
-                    1. Switch to <strong>🎵 CAPTURE APP</strong> tab above<br>
-                    2. Click <strong>"CAPTURE SPOTIFY / YOUTUBE"</strong><br>
-                    3. Select <strong>THIS browser tab</strong><br>
-                    4. ✅ Check <strong>"Share audio"</strong> checkbox<br>
-                    YouTube audio goes directly into your broadcast!
-                  </div>
-                  <button class="btn" onclick="showMusicSource('capture');startAppCapture()" style="border-color:var(--green);color:var(--green);margin-top:8px">🎵 CAPTURE THIS TAB NOW</button>
-                </div>
               </div>
               <div id="directAudioStatus" style="display:none;margin-top:8px">
                 <div style="font-size:10px;color:var(--green)">✓ Audio loaded into playlist</div>
               </div>
+              <div style="margin-top:10px;padding:12px;background:var(--bg);border:1px solid #222;border-radius:6px">
+                <div style="font-size:10px;color:var(--amber);margin-bottom:6px;letter-spacing:1px">YOUTUBE / SPOTIFY</div>
+                <div style="font-size:10px;color:var(--text-dim);line-height:1.7">
+                  1. Play the video or song in <strong style="color:var(--text)">another browser tab</strong><br>
+                  2. Switch to <strong style="color:var(--text)">CAPTURE APP</strong> tab above<br>
+                  3. Click <strong style="color:var(--text)">CAPTURE SPOTIFY / YOUTUBE</strong><br>
+                  4. Select the tab playing audio and check <strong style="color:var(--green)">Share audio</strong><br>
+                  5. Audio streams directly into your broadcast
+                </div>
+                <button class="btn" onclick="showMusicSource('capture');startAppCapture()" style="border-color:var(--green);color:var(--green);margin-top:10px;width:100%">CAPTURE APP AUDIO NOW</button>
+              </div>
               <div style="font-size:9px;color:var(--text-dim);margin-top:8px;line-height:1.5">
-                <strong>Supports:</strong> YouTube links, direct .mp3/.ogg URLs, internet radio streams
+                <strong>Direct URLs:</strong> .mp3, .ogg, .wav, .flac, internet radio streams (Icecast/Shoutcast)
               </div>
             </div>
             <div class="music-playlist" id="musicPlaylist"></div>
@@ -1232,10 +1224,13 @@
               </div>
               <div class="music-controls">
                 <button class="music-btn" onclick="prevTrack()">⏮</button>
+                <button class="music-btn" onclick="fadeOutMusic()" title="Fade Out" id="fadeOutBtn">🔉</button>
                 <button class="music-btn music-play-btn" id="musicPlayBtn" onclick="toggleMusicPlay()">▶</button>
+                <button class="music-btn" onclick="fadeInMusic()" title="Fade In" id="fadeInBtn">🔊</button>
                 <button class="music-btn" onclick="nextTrack()">⏭</button>
                 <button class="music-btn" id="musicLoopBtn" onclick="toggleLoop()" title="Loop">🔁</button>
               </div>
+              <div id="fadeStatus" style="font-size:9px;color:var(--amber);text-align:center;min-height:14px;margin-top:4px"></div>
             </div>
             <div class="control-row" style="margin-top:10px">
               <label>Music Vol</label>
@@ -1246,6 +1241,16 @@
               <label>Mic Vol</label>
               <input type="range" id="micMixVol" min="0" max="1.5" step="0.01" value="1.0" oninput="updateMicMixVol()">
               <span class="value" id="micMixVolVal">100%</span>
+            </div>
+            <div class="control-row">
+              <label>Fade Time</label>
+              <input type="range" id="fadeTime" min="1" max="10" step="0.5" value="3" oninput="document.getElementById('fadeTimeVal').textContent=this.value+'s'">
+              <span class="value" id="fadeTimeVal">3s</span>
+            </div>
+            <div class="control-row">
+              <label>Crossfade</label>
+              <input type="range" id="crossfadeTime" min="0" max="8" step="0.5" value="0" oninput="document.getElementById('crossfadeVal').textContent=this.value==0?'OFF':this.value+'s'">
+              <span class="value" id="crossfadeVal">OFF</span>
             </div>
           </div>
         </div>
@@ -1392,9 +1397,9 @@
     </div>
   </div>
 
-  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
   <script>
-    const SERVER = window.location.origin.includes('localhost') ? 'http://localhost:3333' : window.location.origin;
+    const SERVER = window.location.origin;
     const socket = io(SERVER);
 
     let isLive = false;
@@ -2515,7 +2520,12 @@
         musicAudioElement.currentTime = 0;
         musicAudioElement.play();
       } else if (currentTrackIndex < playlist.length - 1) {
-        nextTrack();
+        const crossTime = parseFloat(document.getElementById('crossfadeTime').value);
+        if (crossTime > 0) {
+          crossfadeToNext();
+        } else {
+          nextTrack();
+        }
       } else {
         document.getElementById('musicPlayBtn').textContent = '▶';
       }
@@ -2526,11 +2536,21 @@
       document.getElementById('musicLoopBtn').classList.toggle('active', isLooping);
     }
 
+    let crossfadeTriggered = false;
     function updateMusicProgress() {
       if (!musicAudioElement || !musicAudioElement.duration) return;
       const pct = (musicAudioElement.currentTime / musicAudioElement.duration) * 100;
       document.getElementById('musicProgressFill').style.width = pct + '%';
       document.getElementById('musicCurrentTime').textContent = formatTime(musicAudioElement.currentTime);
+
+      // Auto-crossfade: start fading before track ends
+      const crossTime = parseFloat(document.getElementById('crossfadeTime').value);
+      const remaining = musicAudioElement.duration - musicAudioElement.currentTime;
+      if (crossTime > 0 && remaining <= crossTime && remaining > 0.5 && !crossfadeTriggered && !isLooping && currentTrackIndex < playlist.length - 1) {
+        crossfadeTriggered = true;
+        crossfadeToNext();
+      }
+      if (remaining > crossTime + 1) crossfadeTriggered = false;
     }
 
     function seekMusic(e) {
@@ -2550,6 +2570,8 @@
       const val = parseFloat(document.getElementById('musicVolume').value);
       document.getElementById('musicVolVal').textContent = Math.round(val * 100) + '%';
       if (musicGainNode) musicGainNode.gain.value = val;
+      if (systemAudioGain) systemAudioGain.gain.value = val;
+      musicTargetVol = val;
     }
 
     function updateMicMixVol() {
@@ -2675,54 +2697,22 @@
       document.getElementById('captureStatus').style.color = 'var(--text-dim)';
     }
 
-    function extractYoutubeId(url) {
-      const patterns = [
-        /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/v\/)([a-zA-Z0-9_-]{11})/,
-        /youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/
-      ];
-      for (const p of patterns) {
-        const match = url.match(p);
-        if (match) return match[1];
-      }
-      return null;
-    }
-
     function loadFromUrl() {
       const url = document.getElementById('streamUrlInput').value.trim();
       if (!url) return;
 
-      const ytId = extractYoutubeId(url);
-      if (ytId) {
-        // YouTube — embed the player
-        loadYoutube(ytId);
-      } else {
-        // Direct audio URL — add to playlist
-        loadStreamUrl(url);
-      }
-    }
-
-    function loadYoutube(videoId) {
-      const container = document.getElementById('youtubePlayerContainer');
-      const iframe = document.getElementById('youtubeIframe');
-      iframe.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&enablejsapi=1`;
-      container.style.display = 'block';
-      document.getElementById('ytStatus').textContent = 'YouTube playing — capture this tab to broadcast';
-      document.getElementById('directAudioStatus').style.display = 'none';
-      document.getElementById('streamUrlInput').value = '';
-    }
-
-    function closeYoutube() {
-      const iframe = document.getElementById('youtubeIframe');
-      iframe.src = '';
-      document.getElementById('youtubePlayerContainer').style.display = 'none';
-    }
-
-    function loadStreamUrl(url) {
-      if (!url) {
-        url = document.getElementById('streamUrlInput').value.trim();
-        if (!url) return;
+      // Check if it's a YouTube link — redirect user to capture mode
+      if (/youtube\.com|youtu\.be/i.test(url)) {
+        document.getElementById('streamUrlInput').value = '';
+        // Open YouTube in a new tab and switch to capture mode
+        window.open(url, '_blank');
+        showMusicSource('capture');
+        document.getElementById('captureStatus').textContent = 'YouTube opened in new tab — click CAPTURE below to stream its audio';
+        document.getElementById('captureStatus').style.color = 'var(--amber)';
+        return;
       }
 
+      // Direct audio URL — add to playlist
       playlist.push({
         name: url.split('/').pop().split('?')[0] || 'Stream',
         url: url,
@@ -2733,8 +2723,120 @@
       playMusic();
       document.getElementById('streamUrlInput').value = '';
       document.getElementById('directAudioStatus').style.display = 'block';
-      document.getElementById('youtubePlayerContainer').style.display = 'none';
       setTimeout(() => { document.getElementById('directAudioStatus').style.display = 'none'; }, 3000);
+    }
+
+    // ===== FADE IN / FADE OUT / CROSSFADE =====
+    let fadeInterval = null;
+    let musicTargetVol = 0.5;
+
+    function fadeInMusic() {
+      if (!musicGainNode) return;
+      const fadeTime = parseFloat(document.getElementById('fadeTime').value);
+      const targetVol = parseFloat(document.getElementById('musicVolume').value);
+      musicTargetVol = targetVol;
+
+      // Start from 0 if music is paused
+      if (musicAudioElement && musicAudioElement.paused) {
+        musicGainNode.gain.value = 0;
+        playMusic();
+      }
+
+      clearInterval(fadeInterval);
+      const startVol = musicGainNode.gain.value;
+      const steps = Math.ceil(fadeTime * 30); // 30fps
+      const volStep = (targetVol - startVol) / steps;
+      let step = 0;
+
+      document.getElementById('fadeStatus').textContent = 'FADING IN...';
+      document.getElementById('fadeInBtn').classList.add('active');
+
+      fadeInterval = setInterval(() => {
+        step++;
+        musicGainNode.gain.value = Math.min(startVol + volStep * step, targetVol);
+        if (step >= steps) {
+          clearInterval(fadeInterval);
+          fadeInterval = null;
+          musicGainNode.gain.value = targetVol;
+          document.getElementById('fadeStatus').textContent = '';
+          document.getElementById('fadeInBtn').classList.remove('active');
+        }
+      }, 1000 / 30);
+    }
+
+    function fadeOutMusic() {
+      if (!musicGainNode) return;
+      const fadeTime = parseFloat(document.getElementById('fadeTime').value);
+
+      clearInterval(fadeInterval);
+      const startVol = musicGainNode.gain.value;
+      const steps = Math.ceil(fadeTime * 30);
+      const volStep = startVol / steps;
+      let step = 0;
+
+      document.getElementById('fadeStatus').textContent = 'FADING OUT...';
+      document.getElementById('fadeOutBtn').classList.add('active');
+
+      fadeInterval = setInterval(() => {
+        step++;
+        musicGainNode.gain.value = Math.max(startVol - volStep * step, 0);
+        if (step >= steps) {
+          clearInterval(fadeInterval);
+          fadeInterval = null;
+          musicGainNode.gain.value = 0;
+          if (musicAudioElement) musicAudioElement.pause();
+          document.getElementById('musicPlayBtn').textContent = '▶';
+          document.getElementById('fadeStatus').textContent = '';
+          document.getElementById('fadeOutBtn').classList.remove('active');
+        }
+      }, 1000 / 30);
+    }
+
+    // Crossfade: fade out current track while fading in next
+    function crossfadeToNext() {
+      const crossTime = parseFloat(document.getElementById('crossfadeTime').value);
+      if (crossTime <= 0 || playlist.length < 2) {
+        nextTrack();
+        return;
+      }
+
+      if (!musicGainNode) { nextTrack(); return; }
+
+      const startVol = musicGainNode.gain.value;
+      const steps = Math.ceil(crossTime * 30);
+      let step = 0;
+
+      // Start fading out current
+      document.getElementById('fadeStatus').textContent = 'CROSSFADING...';
+      clearInterval(fadeInterval);
+
+      fadeInterval = setInterval(() => {
+        step++;
+        const progress = step / steps;
+        // Fade out current
+        musicGainNode.gain.value = startVol * (1 - progress);
+
+        if (step >= Math.floor(steps * 0.3) && step === Math.floor(steps * 0.3)) {
+          // At 30% through, load and play next track
+          const next = (currentTrackIndex + 1) % playlist.length;
+          loadTrack(next);
+          musicGainNode.gain.value = 0;
+          playMusic();
+        }
+
+        if (step > Math.floor(steps * 0.3)) {
+          // Fade in new track
+          const fadeInProgress = (step - Math.floor(steps * 0.3)) / (steps - Math.floor(steps * 0.3));
+          musicGainNode.gain.value = startVol * fadeInProgress;
+        }
+
+        if (step >= steps) {
+          clearInterval(fadeInterval);
+          fadeInterval = null;
+          musicGainNode.gain.value = startVol;
+          document.getElementById('fadeStatus').textContent = '';
+        }
+      }, 1000 / 30);
     }
 
     // VOICE EFFECTS
@@ -2891,13 +2993,8 @@
         return;
       }
 
-      // Sync device selection from whichever selector was used
-      const quickSelect = document.getElementById('extInputDeviceQuick');
       const mainSelect = document.getElementById('extInputDevice');
-      if (quickSelect.value && !mainSelect.value) mainSelect.value = quickSelect.value;
-      if (mainSelect.value && !quickSelect.value) quickSelect.value = mainSelect.value;
-
-      const deviceId = mainSelect.value || quickSelect.value;
+      const deviceId = mainSelect.value;
       if (!deviceId) {
         alert('Select an external audio input device first');
         return;
@@ -2984,18 +3081,6 @@
         const deviceName = select.options[select.selectedIndex].text;
         document.getElementById('extStatusText').textContent = 'Connected: ' + deviceName;
 
-        // Update UI — quick controls
-        const quickBtn = document.getElementById('extQuickConnectBtn');
-        if (quickBtn) {
-          quickBtn.textContent = 'DISCONNECT';
-          quickBtn.style.borderColor = 'var(--red)';
-          quickBtn.style.color = 'var(--red)';
-        }
-        const quickStatus = document.getElementById('extQuickStatus');
-        if (quickStatus) {
-          quickStatus.style.display = 'flex';
-          document.getElementById('extQuickStatusText').textContent = 'Connected: ' + deviceName;
-        }
 
         // Start metering
         startExtMetering();
@@ -3048,15 +3133,6 @@
       document.getElementById('extInputToggle').classList.remove('active');
       document.getElementById('extInputStatus').style.display = 'none';
 
-      // Update quick controls
-      const quickBtn = document.getElementById('extQuickConnectBtn');
-      if (quickBtn) {
-        quickBtn.textContent = 'CONNECT';
-        quickBtn.style.borderColor = 'var(--green)';
-        quickBtn.style.color = 'var(--green)';
-      }
-      const quickStatus = document.getElementById('extQuickStatus');
-      if (quickStatus) quickStatus.style.display = 'none';
     }
 
     async function reconnectExtInput() {

@@ -193,7 +193,7 @@ app.get('/download', (req, res) => {
   if (!isAuthenticated(req)) {
     return res.redirect('/auth/login?redirect=/download');
   }
-  res.sendFile(path.join(__dirname, 'public', 'download.html'));
+  res.sendFile(path.join(__dirname, 'download.html'));
 });
 
 app.get('/download/mac', (req, res) => {
@@ -219,7 +219,9 @@ app.get('/health', (req, res) => {
 
 // API
 app.get('/api/station', (req, res) => {
-  res.json({ ...stationInfo, tunnelUrl, listenerCount: getListenerCount() });
+  // On cloud, use the request host as the broadcast URL
+  const broadcastUrl = tunnelUrl || (IS_CLOUD ? `${req.protocol}://${req.get('host')}` : null);
+  res.json({ ...stationInfo, tunnelUrl: broadcastUrl, listenerCount: getListenerCount() });
 });
 
 app.get('/api/transmissions', (req, res) => {

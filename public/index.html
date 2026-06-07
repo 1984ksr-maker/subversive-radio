@@ -7,8 +7,14 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="SubRadio">
   <meta name="theme-color" content="#0a0a0a">
+  <meta name="description" content="Tune in to Subversive Radio — live underground broadcasts, straight to your browser.">
+  <meta property="og:title" content="Subversive Radio">
+  <meta property="og:description" content="Live underground broadcasts. Tune in now.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="/icon-512.png">
   <link rel="manifest" href="/manifest.json">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
   <title>Subversive Radio — Tune In</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -388,8 +394,8 @@
 
         <div class="volume-bar">
           <label>VOL</label>
-          <input type="range" id="volume" min="0" max="4" step="0.05" value="2" oninput="updateVolume(this.value)">
-          <span class="vol-value" id="volValue">+6 dB</span>
+          <input type="range" id="volume" min="0" max="4" step="0.05" value="1" oninput="updateVolume(this.value)">
+          <span class="vol-value" id="volValue">0 dB</span>
         </div>
       </div>
 

@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
   <title>Subversive Radio — Download & Setup</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -449,12 +450,11 @@
         <h3>Mac Setup (with BlackHole)</h3>
         <ol class="setup-steps">
           <li>Download and install <strong>BlackHole 2ch</strong> from the link above</li>
-          <li>Open <strong>Audio MIDI Setup</strong> (built into Mac) → Create a <strong>Multi-Output Device</strong> combining your speakers + BlackHole</li>
-          <li>Connect your CDJ/mixer's output to your <strong>audio interface</strong> (USB)</li>
-          <li>Open <strong>Subversive Radio Broadcaster</strong> → scroll to <strong>External Input</strong> section</li>
-          <li>Select your audio interface (or BlackHole) from the <strong>Device</strong> dropdown</li>
-          <li>Click <strong>CONNECT</strong> → you'll see the VU meter respond to audio</li>
-          <li>Hit <strong>GO LIVE</strong> — your CDJ audio is now broadcasting!</li>
+          <li>Open <strong>Audio MIDI Setup</strong> (built into Mac) and create a <strong>Multi-Output Device</strong> combining your speakers + BlackHole</li>
+          <li>Connect your CDJ/mixer output to your <strong>USB audio interface</strong></li>
+          <li>Open the <strong>Broadcaster</strong> page and click <strong>EXTERNAL</strong> in the Source Mode selector</li>
+          <li>Select your audio interface (or BlackHole) from the <strong>device dropdown</strong></li>
+          <li>Click <strong>GO LIVE</strong> — your CDJ audio is now broadcasting with no mic!</li>
         </ol>
       </div>
 
@@ -462,22 +462,21 @@
         <h3>Windows Setup (with VB-Cable)</h3>
         <ol class="setup-steps">
           <li>Download and install <strong>VB-Cable</strong> from the link above</li>
-          <li>In Windows Sound Settings → set your CDJ/mixer software output to <strong>CABLE Input (VB-Audio)</strong></li>
-          <li>Open <strong>Subversive Radio Broadcaster</strong> → scroll to <strong>External Input</strong></li>
-          <li>Select <strong>CABLE Output (VB-Audio)</strong> from the Device dropdown</li>
-          <li>Click <strong>CONNECT</strong> → VU meter should show audio coming in</li>
-          <li>Hit <strong>GO LIVE</strong> — broadcasting your external audio!</li>
+          <li>In Windows Sound Settings, set your CDJ/mixer software output to <strong>CABLE Input (VB-Audio)</strong></li>
+          <li>Open the <strong>Broadcaster</strong> page and click <strong>EXTERNAL</strong> in the Source Mode selector</li>
+          <li>Select <strong>CABLE Output (VB-Audio)</strong> from the device dropdown</li>
+          <li>Click <strong>GO LIVE</strong> — broadcasting your external audio!</li>
         </ol>
       </div>
 
       <div class="setup-guide">
-        <h3>Another Computer → This Computer</h3>
+        <h3>Another Computer</h3>
         <ol class="setup-steps">
-          <li>On the <strong>sending computer</strong>: connect a <strong>3.5mm or USB audio cable</strong> from its headphone/line-out to your audio interface's input</li>
-          <li>Alternatively, both computers on same network? Use <strong>NDI Tools</strong> (free) or <strong>JACK NetDriver</strong> for network audio</li>
-          <li>On <strong>this computer</strong>: open the Broadcaster → External Input</li>
-          <li>Select the audio interface receiving the other computer's audio</li>
-          <li>Click <strong>CONNECT</strong> and <strong>GO LIVE</strong></li>
+          <li>On the <strong>sending computer</strong>: connect a <strong>3.5mm or USB audio cable</strong> from its headphone/line-out to your audio interface input</li>
+          <li>Alternatively, use <strong>NDI Tools</strong> (free) or <strong>JACK NetDriver</strong> for network audio over LAN</li>
+          <li>Open the <strong>Broadcaster</strong> and select <strong>EXTERNAL</strong> mode</li>
+          <li>Pick the audio interface receiving the other computer's signal</li>
+          <li>Click <strong>GO LIVE</strong></li>
         </ol>
       </div>
 
@@ -485,9 +484,9 @@
         <h3>Direct Browser Capture (Easiest)</h3>
         <ol class="setup-steps">
           <li>Open the <strong>Broadcaster</strong> in your browser</li>
-          <li>In the <strong>Music Player</strong> section, click the <strong>🎵 CAPTURE APP</strong> tab</li>
+          <li>In the <strong>Music Player</strong> section, click the <strong>CAPTURE APP</strong> tab</li>
           <li>Click <strong>"CAPTURE SPOTIFY / YOUTUBE / ANY APP"</strong></li>
-          <li>Select the tab or app playing music → check <strong>"Share audio"</strong></li>
+          <li>Select the tab or app playing music and check <strong>"Share audio"</strong></li>
           <li>Audio flows directly into your broadcast — digital quality, no cables needed!</li>
         </ol>
       </div>
