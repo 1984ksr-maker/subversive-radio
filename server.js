@@ -54,7 +54,7 @@ function parseCookies(req) {
 
 function getSession(req) {
   const cookies = parseCookies(req);
-  if (cookies['br_electron'] && !IS_CLOUD) return { role: 'admin' };
+  if (cookies['br_electron'] === 'subversive-local-bypass' && !IS_CLOUD) return { role: 'admin' };
   const t = req.query.token || req.headers['x-auth-token'] || cookies['br_token'];
   if (!t) return null;
   const session = activeSessions.get(t);
@@ -67,6 +67,10 @@ function isAuthenticated(req) {
   return !!getSession(req);
 }
 
+function escapeHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
 function isAdmin(req) {
   const s = getSession(req);
   return s && s.role === 'admin';
@@ -74,6 +78,8 @@ function isAdmin(req) {
 
 // Login page HTML — supports access code and admin login
 function loginPageHTML(error = '', redirectTo = '/broadcaster') {
+  redirectTo = escapeHtml(redirectTo);
+  error = escapeHtml(error);
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -344,6 +350,8 @@ app.get('/api/transmissions', (req, res) => {
 app.post('/api/transmissions', (req, res) => {
   if (!isAuthenticated(req)) return res.status(401).json({ error: 'Unauthorized' });
   const { title, audioData, duration } = req.body;
+  if (!audioData || typeof audioData !== 'string') return res.status(400).json({ error: 'Missing audio data' });
+  if (audioData.length > 40 * 1024 * 1024) return res.status(413).json({ error: 'Transmission too large (max 30MB)' });
   const transmission = {
     id: uuidv4(),
     title: title || `Transmission #${transmissions.length + 1}`,
@@ -368,13 +376,18 @@ function getListenerCount() {
 }
 
 // ========== SOCKET.IO — OPTIMIZED FOR 100+ LISTENERS ==========
+let broadcasterSocketId = null;
 
 io.on('connection', (socket) => {
   const clientIp = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
+  let isBroadcaster = false;
+  let isListener = false;
 
   // BROADCASTER
   socket.on('join-broadcaster', () => {
     socket.join('broadcaster');
+    isBroadcaster = true;
+    broadcasterSocketId = socket.id;
     console.log('🎙️  Broadcaster connected');
     socket.emit('listener-count', getListenerCount());
     if (tunnelUrl) socket.emit('tunnel-url', tunnelUrl);
@@ -383,6 +396,7 @@ io.on('connection', (socket) => {
   // LISTENER
   socket.on('join-listener', () => {
     socket.join('listeners');
+    isListener = true;
     const count = getListenerCount();
     console.log(`👤 Listener joined (${count} total)`);
     io.to('broadcaster').emit('listener-count', count);
@@ -438,12 +452,13 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', (reason) => {
-    if (socket.rooms.has('listeners') || !socket.rooms.has('broadcaster')) {
+    if (isListener) {
       const count = getListenerCount();
       io.to('broadcaster').emit('listener-count', count);
     }
-    if (socket.rooms.has('broadcaster')) {
+    if (isBroadcaster && broadcasterSocketId === socket.id) {
       stationInfo.isLive = false;
+      broadcasterSocketId = null;
       io.to('listeners').emit('station-offline');
       console.log('🎙️  Broadcaster disconnected');
     }
@@ -477,6 +492,7 @@ setInterval(() => {
 }, 60000);
 
 // ========== TUNNEL ==========
+let tunnelRetryDelay = 3000;
 function startTunnel() {
   const fs = require('fs');
   const localBin = path.join(__dirname, 'cloudflared');
@@ -499,6 +515,7 @@ function startTunnel() {
   function checkOutput(data) {
     const match = data.toString().match(urlRegex);
     if (match && !tunnelUrl) {
+      tunnelRetryDelay = 3000;
       tunnelUrl = match[0];
       console.log(`\n🔴 BROADCAST: ${tunnelUrl}`);
       console.log(`🎙️  STUDIO:    ${tunnelUrl}/broadcaster\n`);
@@ -507,7 +524,11 @@ function startTunnel() {
   }
   cf.stdout.on('data', checkOutput);
   cf.stderr.on('data', checkOutput);
-  cf.on('close', () => { tunnelUrl = null; setTimeout(startTunnel, 3000); });
+  cf.on('close', () => {
+    tunnelUrl = null;
+    tunnelRetryDelay = Math.min(tunnelRetryDelay * 2, 60000);
+    setTimeout(startTunnel, tunnelRetryDelay);
+  });
   cf.on('error', (err) => console.error('Tunnel error:', err.message));
 }
 
@@ -515,7 +536,7 @@ function startTunnel() {
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`\n📡 Subversive Radio v1.0 — optimized for 100+ listeners`);
   console.log(`   Port: ${PORT}`);
-  console.log(`   🔑 Admin password: ${adminPassword}`);
+  console.log(`   🔑 Admin: password set (${adminPassword.length} chars)`);
   if (IS_CLOUD) {
     console.log('   ☁️  Cloud mode (no tunnel needed)');
   } else {

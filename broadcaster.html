@@ -2340,11 +2340,17 @@
 
     function copyLink() {
       const input = document.getElementById('broadcastLink');
-      input.select();
-      document.execCommand('copy');
-      const btn = input.nextElementSibling;
-      btn.textContent = 'COPIED!';
-      setTimeout(() => btn.textContent = 'COPY', 2000);
+      navigator.clipboard.writeText(input.value).then(() => {
+        const btn = input.nextElementSibling;
+        btn.textContent = 'COPIED!';
+        setTimeout(() => btn.textContent = 'COPY', 2000);
+      }).catch(() => {
+        input.select();
+        document.execCommand('copy');
+        const btn = input.nextElementSibling;
+        btn.textContent = 'COPIED!';
+        setTimeout(() => btn.textContent = 'COPY', 2000);
+      });
     }
 
     function updateStation() {
@@ -2397,7 +2403,6 @@
     let musicAudioElement = null;
     let musicSourceNode = null;
     let musicGainNode = null;
-    let micMixGainNode = null;
     let isLooping = false;
     let systemAudioStream = null;
     let systemAudioSource = null;
@@ -2609,44 +2614,6 @@
       }
     }
 
-    async function toggleSystemAudio() {
-      const toggle = document.getElementById('toggleSystemAudio');
-      toggle.classList.toggle('on');
-      const isOn = toggle.classList.contains('on');
-
-      if (isOn) {
-        try {
-          // Capture system audio via screen share (audio only)
-          systemAudioStream = await navigator.mediaDevices.getDisplayMedia({
-            video: true, // required to get audio
-            audio: true
-          });
-          // Stop the video track — we only want audio
-          systemAudioStream.getVideoTracks().forEach(t => t.stop());
-
-          if (audioContext && systemAudioStream.getAudioTracks().length > 0) {
-            systemAudioSource = audioContext.createMediaStreamSource(systemAudioStream);
-            systemAudioGain = audioContext.createGain();
-            systemAudioGain.gain.value = parseFloat(document.getElementById('musicVolume').value);
-            systemAudioGain.channelCount = 1;
-            systemAudioGain.channelCountMode = 'explicit';
-            systemAudioGain.channelInterpretation = 'speakers';
-            systemAudioSource.connect(systemAudioGain);
-            systemAudioGain.connect(limiterNode);
-          }
-
-          systemAudioStream.getAudioTracks()[0].onended = () => {
-            toggle.classList.remove('on');
-            cleanupSystemAudio();
-          };
-        } catch (e) {
-          toggle.classList.remove('on');
-          console.error('System audio capture failed:', e);
-        }
-      } else {
-        cleanupSystemAudio();
-      }
-    }
 
     function cleanupSystemAudio() {
       if (systemAudioSource) { try { systemAudioSource.disconnect(); } catch(e) {} systemAudioSource = null; }
@@ -2884,7 +2851,7 @@
 
     // VOICE EFFECTS
     let voiceEnabled = false;
-    let voicePitchNode, voiceDistortNode, voiceDelayNode, voiceDelayGain, voiceBandpass;
+    let voiceDistortNode, voiceDelayNode, voiceDelayGain, voiceBandpass;
     let currentVoicePreset = 'none';
 
     function toggleVoiceEffect() {

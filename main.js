@@ -57,7 +57,7 @@ function createWindow() {
   const cookie = {
     url: `http://localhost:${PORT}`,
     name: 'br_electron',
-    value: '1'
+    value: 'subversive-local-bypass'
   };
 
   // Load the broadcaster through the local server

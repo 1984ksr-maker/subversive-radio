@@ -673,20 +673,24 @@
         setTimeout(() => {
           if (isListening) document.getElementById('statusText').textContent = 'Tuned in — receiving broadcast';
         }, 500);
+        startKeepAlive();
+        setupMediaSession();
+        updateMediaSessionState(true);
       } else {
         isListening = false;
         nextPlayTime = 0;
-        // Stop all playing audio to prevent echo
         activeSources.forEach(s => { try { s.stop(); } catch(e) {} });
         activeSources = [];
         btn.textContent = 'TUNE IN';
         btn.classList.remove('listening');
         document.getElementById('statusText').textContent = 'Paused';
+        stopKeepAlive();
+        updateMediaSessionState(false);
       }
     }
 
     function updateVolume(val) {
-      val = parseFloat(val);
+      val = Math.max(0, Math.min(4, parseFloat(val)));
       const db = val > 0 ? (20 * Math.log10(val)).toFixed(0) : '-∞';
       document.getElementById('volValue').textContent = (db > 0 ? '+' : '') + db + ' dB';
       if (gainNode) gainNode.gain.value = val;
@@ -873,41 +877,6 @@
       navigator.mediaSession.playbackState = playing ? 'playing' : 'paused';
     }
 
-    // 3. Patch toggleListen to activate keep-alive + media session
-    const _originalToggleListen = toggleListen;
-    toggleListen = function() {
-      const btn = document.getElementById('tuneInBtn');
-
-      if (!isListening) {
-        if (!audioContext) initAudio();
-        if (audioContext.state === 'suspended') audioContext.resume();
-        isListening = true;
-        nextPlayTime = 0;
-        btn.textContent = 'LISTENING';
-        btn.classList.add('listening');
-        document.getElementById('statusText').textContent = 'Buffering...';
-        setTimeout(() => {
-          if (isListening) document.getElementById('statusText').textContent = 'Tuned in — receiving broadcast';
-        }, 500);
-
-        // Start background audio tricks
-        startKeepAlive();
-        setupMediaSession();
-        updateMediaSessionState(true);
-
-      } else {
-        isListening = false;
-        nextPlayTime = 0;
-        activeSources.forEach(s => { try { s.stop(); } catch(e) {} });
-        activeSources = [];
-        btn.textContent = 'TUNE IN';
-        btn.classList.remove('listening');
-        document.getElementById('statusText').textContent = 'Paused';
-
-        stopKeepAlive();
-        updateMediaSessionState(false);
-      }
-    };
 
     // 4. Keep audio context alive when page is hidden (background tab / screen off)
     document.addEventListener('visibilitychange', () => {
