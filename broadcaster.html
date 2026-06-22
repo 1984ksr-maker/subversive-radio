@@ -1620,32 +1620,44 @@
         const deviceId = document.getElementById('inputDevice').value;
         const isExternal = (sourceMode === 'external');
 
-        if (deviceId) {
-          // Use the selected device — works for BOTH mic and external modes
-          mediaStream = await navigator.mediaDevices.getUserMedia({
-            audio: {
-              deviceId: { exact: deviceId },
-              // External: raw audio, no processing. Mic: browser processing on.
-              echoCancellation: !isExternal,
-              noiseSuppression: !isExternal,
-              autoGainControl: !isExternal
-            }
-          });
-          sourceNode = audioContext.createMediaStreamSource(mediaStream);
-        } else if (useMic) {
-          // No specific device selected — use default mic
-          mediaStream = await navigator.mediaDevices.getUserMedia({
-            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-          });
-          sourceNode = audioContext.createMediaStreamSource(mediaStream);
-        } else {
-          // External mode but no device selected yet — create silent placeholder
+        function createSilentSource() {
           const silentBuffer = audioContext.createBuffer(1, 1024, currentSampleRate);
           const silentSource = audioContext.createBufferSource();
           silentSource.buffer = silentBuffer;
           silentSource.loop = true;
           silentSource.start();
-          sourceNode = silentSource;
+          return silentSource;
+        }
+
+        if (deviceId) {
+          try {
+            mediaStream = await navigator.mediaDevices.getUserMedia({
+              audio: {
+                deviceId: { exact: deviceId },
+                echoCancellation: !isExternal,
+                noiseSuppression: !isExternal,
+                autoGainControl: !isExternal
+              }
+            });
+            sourceNode = audioContext.createMediaStreamSource(mediaStream);
+          } catch (micErr) {
+            console.warn('Mic access denied, using silent source:', micErr.message);
+            sourceNode = createSilentSource();
+            mediaStream = null;
+          }
+        } else if (useMic) {
+          try {
+            mediaStream = await navigator.mediaDevices.getUserMedia({
+              audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+            });
+            sourceNode = audioContext.createMediaStreamSource(mediaStream);
+          } catch (micErr) {
+            console.warn('Mic access denied, using silent source:', micErr.message);
+            sourceNode = createSilentSource();
+            mediaStream = null;
+          }
+        } else {
+          sourceNode = createSilentSource();
           mediaStream = null;
         }
 
@@ -2473,8 +2485,11 @@
       }
     }
 
-    function playMusic() {
+    async function playMusic() {
       if (!musicAudioElement || currentTrackIndex === -1) return;
+      if (!audioContext) {
+        try { await initAudio(); } catch(e) {}
+      }
       if (!audioContext) return;
       if (audioContext.state === 'suspended') audioContext.resume();
       connectMusicToChain();
@@ -2696,7 +2711,15 @@
         };
 
       } catch (e) {
-        document.getElementById('captureStatus').textContent = 'Cancelled or denied';
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        const isAndroid = /Android/.test(navigator.userAgent);
+        if (isIOS) {
+          document.getElementById('captureStatus').textContent = 'Not supported on iOS — use desktop to broadcast music';
+        } else if (isAndroid) {
+          document.getElementById('captureStatus').textContent = 'Tab capture may not work on Android — try FILES instead';
+        } else {
+          document.getElementById('captureStatus').textContent = 'Cancelled or denied';
+        }
         document.getElementById('captureStatus').style.color = '#ff6666';
         console.error('Capture failed:', e);
       }
