@@ -3226,6 +3226,68 @@
         buttons[1].classList.add('active');
       }
     }
+
+    // ========== KEEP BROADCASTING ON SCREEN LOCK ==========
+    let wakeLock = null;
+    let keepAliveInterval = null;
+    let keepAliveAudio = null;
+
+    async function acquireWakeLock() {
+      if ('wakeLock' in navigator) {
+        try { wakeLock = await navigator.wakeLock.request('screen'); } catch(e) {}
+      }
+    }
+
+    function releaseWakeLock() {
+      if (wakeLock) { wakeLock.release(); wakeLock = null; }
+    }
+
+    function startBroadcastKeepAlive() {
+      if (keepAliveAudio) return;
+      keepAliveAudio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdG2Mj4+LhXmEa3B8g4aPkI2KgHZ1eICHjpCOiYJ3cXR/hoyQkI2Jg3d0d3+Gj5CPjYmDeHN3f4aPkI6KhHh0d4CGjpCPjImDeHR3gIaPkI6KhHh0eICGjpCPjImDeHR4gIaPkI6KhHl0eICGjpCPjImEeHR4gIaPj46KhHl0eICGjpCPjImEeHR4gIePj46KhHl0eICGjpCPjImEeXR4gIePj46KhHl1eICGjpCPjImEeXR4gIePj46KhHl1eICHjpCPjImEeXV4gIePj46KhHl1eYCHjpCPjImEeXV5gIePj46KhXl1eYCHjpCPjIqEeXV5gIePj46KhXl1eYCHjpCPjIqFeXV5gIePj46KhXp1eYCHjpCPjIqFeXV5gIePkI6KhXp1eYCHjpCPjIqFeXZ5gIePkI6KhXp2eYCHjpCPjIqFeXZ5gYePkI6KhXp2eYCHj5CPjIqFeXZ6gYePkI6LhXp2eYGHj5CPjIqFeXZ6gYePkI6LhXp2eoGHj5CPjIqGeXZ6gYePkI6LhXt2eoGHj5CPjYqGeXZ6gYePkI6LhXt2eoGIj5CPjYqGeXd6gYePkI6LhXt3eoGIj5CPjYqGeXd6gYePkI+LhXt3eoGIj5CPjYqGend6gYiPkI+LhXt3eoGIj5CPjYuGend6gYiPkI+LhXt3e4GIj5CPjYuGend7gYiPkI+LhXt3e4GIj5CPjYuGent7gYiPkI+Lhnt3e4GIj5CPjYuGent7gYiQkI+Lhnt3e4GIkJCPjYuGent7goiQkI+Lhnt4e4GIkJCPjYuHent7goiQkI+Mhnt4e4GIkJCPjYuHent8goiQkI+Mhnt4e4KIkJCQjYuHe3t8goiQkI+Mhnt4fIKIkJCQjYuHe3t8goiQkI+Mh3t4fIKIkJCQjYuHe3x8goiQkI+Mh3t4fIKIkJCQjouHe3x8goiQkJCMh3t4fIKJkJCQjouHe3x8goiQkJCMh3x4fIKJkJCQjouHfHx8goiQkJCMh3x4fIKJkJCQjouHfHx9goiQkJCNh3x4fYKJkJCQjouIfHx9goiQkJCNh3x5fYKJkJCQjouIfHx9goiRkJCNh3x5fYKJkJCQjouIfH19goiRkJCNh3x5fYOJkJCQjouIfH19goiRkJCNiHx5fYOJkJCRjouIfH19goiRkJCNiHx5fYOJkZCRjouIfH19g4iRkJCNiHx5fYOJkZCRjouIfX19g4iRkJCNiH15fYOJkZCRj4uIfX19g4iRkJCOiH15fYOJkZCRj4uIfX1+g4iRkJCOiH15foOJkZCRj4uIfX1+g4mRkJGOiH15foOJkZCRj4yIfX1+g4mRkJGOiH55foOJkZGRj4yIfX1+g4mRkJGOiX55foOJkZGRj4yIfn1+g4mRkZGOiX55foOKkZGRj4yIfn5+g4mRkZGOiX55foOKkZGRj4yJfn5+g4mRkZGOiX55f4OKkZGRkIyJfn5+hImRkZGOiX55f4OKkZGRkIyJfn5/hImRkZGPiX55f4OKkZGRkIyJfn5/hImRkZGPiX95f4OKkZGRkIyJf35/hImRkZGPiX95f4OKkZGRkI2Jf35/hImRkZGPiX95f4SKkZGRkI2Jf35/hImSkZGPiX95f4SKkZGSkI2Jf35/hIqSkZGPiX96f4SKkZGSkI2Jf39/hIqSkZGPin96f4SKkZGSkI2Kf39/hIqSkZKPig==');
+      keepAliveAudio.loop = true;
+      keepAliveAudio.volume = 0.01;
+      keepAliveAudio.play().catch(() => {});
+      keepAliveInterval = setInterval(() => {
+        if (audioContext && audioContext.state === 'suspended') audioContext.resume();
+      }, 3000);
+    }
+
+    function stopBroadcastKeepAlive() {
+      if (keepAliveAudio) { keepAliveAudio.pause(); keepAliveAudio = null; }
+      if (keepAliveInterval) { clearInterval(keepAliveInterval); keepAliveInterval = null; }
+      releaseWakeLock();
+    }
+
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: 'Subversive Radio',
+        artist: 'Broadcasting Live',
+        album: 'Subversive Radio'
+      });
+    }
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && isLive) {
+        if (audioContext && audioContext.state === 'suspended') audioContext.resume();
+        startBroadcastKeepAlive();
+        acquireWakeLock();
+      } else if (!document.hidden) {
+        acquireWakeLock();
+      }
+    });
+
+    const _origGoLive = typeof goLive === 'function' ? goLive : null;
+    const origGoLiveBtn = document.getElementById('goLiveBtn');
+    if (origGoLiveBtn) {
+      const origOnclick = origGoLiveBtn.onclick;
+      origGoLiveBtn.addEventListener('click', () => {
+        setTimeout(() => {
+          if (isLive) { acquireWakeLock(); startBroadcastKeepAlive(); }
+          else { stopBroadcastKeepAlive(); }
+        }, 500);
+      });
+    }
   </script>
 </body>
 </html>
