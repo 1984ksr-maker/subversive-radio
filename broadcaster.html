@@ -1012,8 +1012,8 @@
           <div class="control-group">
             <div class="control-row">
               <label>Input Gain</label>
-              <input type="range" id="inputGain" min="-12" max="24" step="0.5" value="6" oninput="updateGain()">
-              <span class="value" id="inputGainVal">+6 dB</span>
+              <input type="range" id="inputGain" min="-12" max="24" step="0.5" value="0" oninput="updateGain()">
+              <span class="value" id="inputGainVal">0 dB</span>
             </div>
             <div class="control-row">
               <label>Output</label>
@@ -1426,6 +1426,9 @@
 
     // Convert dB to linear gain
     function dbToGain(db) { return Math.pow(10, db / 20); }
+    function smoothGain(param, value) {
+      param.setTargetAtTime(value, audioContext ? audioContext.currentTime : 0, 0.02);
+    }
     // Convert linear gain to dB
     function gainToDb(gain) { return gain > 0 ? 20 * Math.log10(gain) : -Infinity; }
 
@@ -1738,11 +1741,9 @@
         processorNode = audioContext.createScriptProcessor(currentBufferSize, 1, 1);
         outputGainNode.connect(processorNode);
 
-        // Keep processor alive via silent output
-        const silentGain = audioContext.createGain();
-        silentGain.gain.value = 0;
-        processorNode.connect(silentGain);
-        silentGain.connect(audioContext.destination);
+        // Keep processor alive — connect to a silent destination, NOT speakers
+        const silentDest = audioContext.createMediaStreamDestination();
+        processorNode.connect(silentDest);
 
         processorNode.onaudioprocess = (e) => {
           if (!isLive) return;
@@ -1913,29 +1914,29 @@
       }
     }
 
-    // CONTROLS — all gain sliders work in dB
+    // CONTROLS — all gain sliders use smooth transitions to prevent clicks
     function updateGain() {
       const db = parseFloat(document.getElementById('inputGain').value);
       document.getElementById('inputGainVal').textContent = (db > 0 ? '+' : '') + db + ' dB';
-      if (gainNode && !micMuted) gainNode.gain.value = dbToGain(db);
+      if (gainNode && !micMuted) smoothGain(gainNode.gain, dbToGain(db));
     }
 
     function updateOutput() {
       const db = parseFloat(document.getElementById('outputLevel').value);
       document.getElementById('outputLevelVal').textContent = (db > 0 ? '+' : '') + db + ' dB';
-      if (outputGainNode) outputGainNode.gain.value = dbToGain(db);
+      if (outputGainNode) smoothGain(outputGainNode.gain, dbToGain(db));
     }
 
     function updateMakeup() {
       const db = parseFloat(document.getElementById('makeupGain').value);
       document.getElementById('makeupGainVal').textContent = (db > 0 ? '+' : '') + db + ' dB';
-      if (makeupGainNode) makeupGainNode.gain.value = dbToGain(db);
+      if (makeupGainNode) smoothGain(makeupGainNode.gain, dbToGain(db));
     }
 
     function updateMonitor() {
       const val = parseFloat(document.getElementById('monitorLevel').value);
       document.getElementById('monitorLevelVal').textContent = val === 0 ? 'OFF' : Math.round(val * 100) + '%';
-      if (monitorGainNode) monitorGainNode.gain.value = val;
+      if (monitorGainNode) smoothGain(monitorGainNode.gain, val);
     }
 
     function toggleEQ() {
@@ -2570,8 +2571,8 @@
     function updateMusicVol() {
       const val = parseFloat(document.getElementById('musicVolume').value);
       document.getElementById('musicVolVal').textContent = Math.round(val * 100) + '%';
-      if (musicGainNode) musicGainNode.gain.value = val;
-      if (systemAudioGain) systemAudioGain.gain.value = val;
+      if (musicGainNode) smoothGain(musicGainNode.gain, val);
+      if (systemAudioGain) smoothGain(systemAudioGain.gain, val);
       musicTargetVol = val;
     }
 
@@ -2581,7 +2582,7 @@
       // Adjust the input gain to act as mic mix
       if (gainNode) {
         const baseGain = dbToGain(parseFloat(document.getElementById('inputGain').value));
-        gainNode.gain.value = baseGain * val;
+        smoothGain(gainNode.gain, baseGain * val);
       }
     }
 
@@ -3045,7 +3046,7 @@
 
         // Monitor output (direct to speakers, off by default)
         extMonitorGain = audioContext.createGain();
-        extMonitorGain.gain.value = document.getElementById('extMonitor').checked ? 0.8 : 0;
+        extMonitorGain.gain.value = 0;
 
         // ===== ROUTING DEPENDS ON SOURCE MODE =====
         if (sourceMode === 'external') {
@@ -3155,7 +3156,7 @@
     function updateExtVolume() {
       const val = parseFloat(document.getElementById('extInputVolume').value);
       document.getElementById('extVolVal').textContent = Math.round(val * 100) + '%';
-      if (extInputGain) extInputGain.gain.value = val;
+      if (extInputGain) smoothGain(extInputGain.gain, val);
     }
 
     function updateExtPan() {
