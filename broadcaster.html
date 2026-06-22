@@ -1741,9 +1741,9 @@
         highPassFilter.connect(gainNode);
         rebuildChain();
 
-        // Monitor output (silent by default)
+        // Monitor output — NOT connected to speakers by default (prevents feedback)
+        // Only connects when user explicitly turns monitor on
         outputGainNode.connect(monitorGainNode);
-        monitorGainNode.connect(audioContext.destination);
 
         // Connect output to recording destination
         outputGainNode.connect(recordDestination);
@@ -1948,7 +1948,15 @@
     function updateMonitor() {
       const val = parseFloat(document.getElementById('monitorLevel').value);
       document.getElementById('monitorLevelVal').textContent = val === 0 ? 'OFF' : Math.round(val * 100) + '%';
-      if (monitorGainNode) smoothGain(monitorGainNode.gain, val);
+      if (monitorGainNode) {
+        if (val > 0) {
+          try { monitorGainNode.connect(audioContext.destination); } catch(e) {}
+          smoothGain(monitorGainNode.gain, val);
+        } else {
+          smoothGain(monitorGainNode.gain, 0);
+          setTimeout(() => { try { monitorGainNode.disconnect(audioContext.destination); } catch(e) {} }, 50);
+        }
+      }
     }
 
     function toggleEQ() {
@@ -3081,9 +3089,8 @@
           extInputPanner.connect(highPassFilter); // into the MAIN chain
           extInputPanner.connect(extInputAnalyser); // for metering
 
-          // Monitor path
+          // Monitor path — NOT connected to speakers (prevents feedback)
           extInputPanner.connect(extMonitorGain);
-          extMonitorGain.connect(audioContext.destination);
 
           // Set gainNode to pass through (not muted) for external signal
           gainNode.gain.value = dbToGain(parseFloat(document.getElementById('inputGain').value));
@@ -3094,9 +3101,8 @@
           extInputPanner.connect(limiterNode); // into the broadcast output chain
           extInputPanner.connect(extInputAnalyser); // for metering
 
-          // Monitor path
+          // Monitor path — NOT connected to speakers (prevents feedback)
           extInputPanner.connect(extMonitorGain);
-          extMonitorGain.connect(audioContext.destination);
         }
 
         extConnected = true;
@@ -3192,7 +3198,15 @@
 
     function updateExtMonitor() {
       const on = document.getElementById('extMonitor').checked;
-      if (extMonitorGain) extMonitorGain.gain.value = on ? 0.8 : 0;
+      if (extMonitorGain) {
+        if (on) {
+          try { extMonitorGain.connect(audioContext.destination); } catch(e) {}
+          extMonitorGain.gain.value = 0.8;
+        } else {
+          extMonitorGain.gain.value = 0;
+          setTimeout(() => { try { extMonitorGain.disconnect(audioContext.destination); } catch(e) {} }, 50);
+        }
+      }
     }
 
     function startExtMetering() {
