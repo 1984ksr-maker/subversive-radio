@@ -2490,10 +2490,11 @@
       // Create music source node (only once per element)
       if (!musicSourceNode) {
         musicSourceNode = audioContext.createMediaElementSource(musicAudioElement);
+        musicAudioElement.volume = 0;
+        musicAudioElement.muted = false;
         musicGainNode = audioContext.createGain();
         musicGainNode.gain.value = parseFloat(document.getElementById('musicVolume').value);
         musicSourceNode.connect(musicGainNode);
-        // Connect music to the output chain (after limiter, before output gain)
         musicGainNode.connect(limiterNode);
       }
     }
@@ -3246,7 +3247,7 @@
       if (keepAliveAudio) return;
       keepAliveAudio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdG2Mj4+LhXmEa3B8g4aPkI2KgHZ1eICHjpCOiYJ3cXR/hoyQkI2Jg3d0d3+Gj5CPjYmDeHN3f4aPkI6KhHh0d4CGjpCPjImDeHR3gIaPkI6KhHh0eICGjpCPjImDeHR4gIaPkI6KhHl0eICGjpCPjImEeHR4gIaPj46KhHl0eICGjpCPjImEeHR4gIePj46KhHl0eICGjpCPjImEeXR4gIePj46KhHl1eICGjpCPjImEeXR4gIePj46KhHl1eICHjpCPjImEeXV4gIePj46KhHl1eYCHjpCPjImEeXV5gIePj46KhXl1eYCHjpCPjIqEeXV5gIePj46KhXl1eYCHjpCPjIqFeXV5gIePj46KhXp1eYCHjpCPjIqFeXV5gIePkI6KhXp1eYCHjpCPjIqFeXZ5gIePkI6KhXp2eYCHjpCPjIqFeXZ5gYePkI6KhXp2eYCHj5CPjIqFeXZ6gYePkI6LhXp2eYGHj5CPjIqFeXZ6gYePkI6LhXp2eoGHj5CPjIqGeXZ6gYePkI6LhXt2eoGHj5CPjYqGeXZ6gYePkI6LhXt2eoGIj5CPjYqGeXd6gYePkI6LhXt3eoGIj5CPjYqGeXd6gYePkI+LhXt3eoGIj5CPjYqGend6gYiPkI+LhXt3eoGIj5CPjYuGend6gYiPkI+LhXt3e4GIj5CPjYuGend7gYiPkI+LhXt3e4GIj5CPjYuGent7gYiPkI+Lhnt3e4GIj5CPjYuGent7gYiQkI+Lhnt3e4GIkJCPjYuGent7goiQkI+Lhnt4e4GIkJCPjYuHent7goiQkI+Mhnt4e4GIkJCPjYuHent8goiQkI+Mhnt4e4KIkJCQjYuHe3t8goiQkI+Mhnt4fIKIkJCQjYuHe3t8goiQkI+Mh3t4fIKIkJCQjYuHe3x8goiQkI+Mh3t4fIKIkJCQjouHe3x8goiQkJCMh3t4fIKJkJCQjouHe3x8goiQkJCMh3x4fIKJkJCQjouHfHx8goiQkJCMh3x4fIKJkJCQjouHfHx9goiQkJCNh3x4fYKJkJCQjouIfHx9goiQkJCNh3x5fYKJkJCQjouIfHx9goiRkJCNh3x5fYKJkJCQjouIfH19goiRkJCNh3x5fYOJkJCQjouIfH19goiRkJCNiHx5fYOJkJCRjouIfH19goiRkJCNiHx5fYOJkZCRjouIfH19g4iRkJCNiHx5fYOJkZCRjouIfX19g4iRkJCNiH15fYOJkZCRj4uIfX19g4iRkJCOiH15fYOJkZCRj4uIfX1+g4iRkJCOiH15foOJkZCRj4uIfX1+g4mRkJGOiH15foOJkZCRj4yIfX1+g4mRkJGOiH55foOJkZGRj4yIfX1+g4mRkJGOiX55foOJkZGRj4yIfn1+g4mRkZGOiX55foOKkZGRj4yIfn5+g4mRkZGOiX55foOKkZGRj4yJfn5+g4mRkZGOiX55f4OKkZGRkIyJfn5+hImRkZGOiX55f4OKkZGRkIyJfn5/hImRkZGPiX55f4OKkZGRkIyJfn5/hImRkZGPiX95f4OKkZGRkIyJf35/hImRkZGPiX95f4OKkZGRkI2Jf35/hImRkZGPiX95f4SKkZGRkI2Jf35/hImSkZGPiX95f4SKkZGSkI2Jf35/hIqSkZGPiX96f4SKkZGSkI2Jf39/hIqSkZGPin96f4SKkZGSkI2Kf39/hIqSkZKPig==');
       keepAliveAudio.loop = true;
-      keepAliveAudio.volume = 0.01;
+      keepAliveAudio.volume = 0.001;
       keepAliveAudio.play().catch(() => {});
       keepAliveInterval = setInterval(() => {
         if (audioContext && audioContext.state === 'suspended') audioContext.resume();
