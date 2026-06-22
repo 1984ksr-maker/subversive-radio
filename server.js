@@ -370,6 +370,107 @@ app.delete('/api/transmissions/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+// Embeddable mini player
+app.get('/embed', (req, res) => {
+  res.setHeader('X-Frame-Options', 'ALLOWALL');
+  res.setHeader('Content-Security-Policy', '');
+  res.send(embedPlayerHTML(req));
+});
+
+function embedPlayerHTML(req) {
+  const host = `${req.protocol}://${req.get('host')}`;
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Subversive Radio</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'SF Mono','Courier New',monospace;background:#0a0a0a;color:#e0e0e0;display:flex;align-items:center;justify-content:center;min-height:100vh}
+.player{background:#141414;border:1px solid #222;border-radius:14px;padding:24px;width:100%;max-width:360px;text-align:center}
+.status{display:inline-block;padding:4px 12px;border:1px solid #333;border-radius:16px;font-size:9px;letter-spacing:2px;color:#666;text-transform:uppercase;margin-bottom:12px}
+.status.live{border-color:#ff2d2d;color:#ff2d2d;box-shadow:0 0 10px rgba(255,45,45,0.3);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
+.title{font-size:18px;font-weight:700;letter-spacing:4px;color:#ff2d2d;margin-bottom:6px}
+.tagline{font-size:11px;color:#666;letter-spacing:1px;margin-bottom:20px}
+.play-btn{width:80px;height:80px;border-radius:50%;border:2px solid #333;background:transparent;color:#e0e0e0;font-size:11px;letter-spacing:2px;cursor:pointer;transition:all .3s;display:inline-flex;align-items:center;justify-content:center;font-family:inherit}
+.play-btn:hover{border-color:#ff2d2d;color:#ff2d2d;box-shadow:0 0 20px rgba(255,45,45,0.2)}
+.play-btn.listening{border-color:#00ff88;color:#00ff88;box-shadow:0 0 20px rgba(0,255,136,0.2)}
+.vol-row{display:flex;align-items:center;gap:8px;margin-top:18px}
+.vol-row label{font-size:9px;color:#666;letter-spacing:1px}
+.vol-row input[type=range]{flex:1;-webkit-appearance:none;background:#222;height:3px;border-radius:2px;outline:none}
+.vol-row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:#ff2d2d;cursor:pointer}
+.listeners{font-size:9px;color:#444;margin-top:12px;letter-spacing:1px}
+.offline-msg{font-size:11px;color:#444;margin-top:8px}
+</style>
+</head>
+<body>
+<div class="player">
+  <div class="status" id="badge">OFFLINE</div>
+  <div class="title" id="stName">SUBVERSIVE RADIO</div>
+  <div class="tagline" id="stTag">Broadcasting from the underground</div>
+  <button class="play-btn" id="playBtn" onclick="toggle()">TUNE IN</button>
+  <div class="offline-msg" id="offMsg">Station is offline</div>
+  <div class="vol-row" style="display:none" id="volRow">
+    <label>VOL</label>
+    <input type="range" id="vol" min="0" max="1" step="0.05" value="1" oninput="setVol(this.value)">
+  </div>
+  <div class="listeners" id="lCount"></div>
+</div>
+<script src="${host}/socket.io/socket.io.js"></script>
+<script>
+const SERVER='${host}';
+let socket,audioContext,gainNode,isListening=false,nextPlayTime=0,activeSources=[],isLive=false;
+
+fetch(SERVER+'/api/station').then(r=>r.json()).then(d=>{
+  document.getElementById('stName').textContent=d.name||'SUBVERSIVE RADIO';
+  document.getElementById('stTag').textContent=d.tagline||'';
+  if(d.isLive){isLive=true;goLive();}
+  if(d.listenerCount)document.getElementById('lCount').textContent=d.listenerCount+' listening';
+}).catch(()=>{});
+
+socket=io(SERVER,{transports:['websocket','polling']});
+socket.on('connect',()=>{socket.emit('join-listener');});
+socket.on('station-live',d=>{isLive=true;goLive();});
+socket.on('station-off',()=>{isLive=false;goOff();if(isListening)toggle();});
+socket.on('listener-count',c=>{document.getElementById('lCount').textContent=c>0?c+' listening':'';});
+socket.on('audio-chunk',(buf)=>{if(!isListening||!audioContext)return;try{audioContext.decodeAudioData(buf.slice(0),(decoded)=>{const src=audioContext.createBufferSource();src.buffer=decoded;src.connect(gainNode);const now=audioContext.currentTime;if(nextPlayTime<now)nextPlayTime=now+0.05;src.start(nextPlayTime);activeSources.push(src);src.onended=()=>{activeSources=activeSources.filter(s=>s!==src);};nextPlayTime+=decoded.duration;});} catch(e){}});
+
+function goLive(){
+  document.getElementById('badge').textContent='LIVE';
+  document.getElementById('badge').classList.add('live');
+  document.getElementById('offMsg').style.display='none';
+}
+function goOff(){
+  document.getElementById('badge').textContent='OFFLINE';
+  document.getElementById('badge').classList.remove('live');
+  document.getElementById('offMsg').style.display='';
+}
+
+function toggle(){
+  const btn=document.getElementById('playBtn');
+  if(!isListening){
+    if(!isLive)return;
+    audioContext=new(window.AudioContext||window.webkitAudioContext)();
+    gainNode=audioContext.createGain();gainNode.connect(audioContext.destination);
+    isListening=true;nextPlayTime=0;
+    btn.textContent='LISTENING';btn.classList.add('listening');
+    document.getElementById('volRow').style.display='flex';
+  }else{
+    isListening=false;nextPlayTime=0;
+    activeSources.forEach(s=>{try{s.stop();}catch(e){}});activeSources=[];
+    if(audioContext){audioContext.close();audioContext=null;}
+    btn.textContent='TUNE IN';btn.classList.remove('listening');
+    document.getElementById('volRow').style.display='none';
+  }
+}
+function setVol(v){if(gainNode)gainNode.gain.value=parseFloat(v);}
+</script>
+</body>
+</html>`;
+}
+
 function getListenerCount() {
   const listeners = io.sockets.adapter.rooms.get('listeners');
   return listeners ? listeners.size : 0;
