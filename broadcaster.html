@@ -1360,6 +1360,7 @@
           <h2>Short Transmissions</h2>
           <div class="record-controls">
             <button class="record-btn" id="recordBtn" onclick="toggleRecord()">● RECORD</button>
+            <button class="record-btn" id="saveToComputerBtn" onclick="saveRecordingToComputer()" style="display:none;border-color:var(--green);color:var(--green);font-size:10px">💾 SAVE</button>
           </div>
           <div class="recording-timer" id="recordingTimer">00:00</div>
           <input type="text" class="title-input" id="transmissionTitle" placeholder="Transmission title...">
@@ -1372,16 +1373,8 @@
           <input type="text" id="stationNameInput" placeholder="Station name" value="SUBVERSIVE RADIO" onchange="updateStation()">
           <input type="text" id="stationTagline" placeholder="Tagline" value="Broadcasting from the underground" onchange="updateStation()">
 
-          <div style="margin-top:16px;padding-top:16px;border-top:1px solid #333">
-            <h2 style="font-size:11px;letter-spacing:2px;color:#ff2d2d;margin-bottom:10px">🔒 CHANGE PASSWORD</h2>
-            <input type="password" id="currentPw" placeholder="Current password" style="margin-bottom:6px">
-            <input type="password" id="newPw" placeholder="New password" style="margin-bottom:6px">
-            <input type="password" id="confirmPw" placeholder="Confirm new password" style="margin-bottom:8px">
-            <button class="btn" onclick="changePassword()" style="width:100%;padding:10px;font-size:11px;letter-spacing:2px">CHANGE PASSWORD</button>
-            <div id="pwMsg" style="font-size:10px;margin-top:6px;text-align:center;min-height:14px"></div>
-          </div>
-
-          <div style="margin-top:12px;text-align:center">
+          <div style="margin-top:16px;padding-top:16px;border-top:1px solid #333;text-align:center;display:flex;flex-direction:column;gap:8px">
+            <a href="/admin" style="display:block;padding:10px;border:1px solid #ffaa00;border-radius:6px;color:#ffaa00;font-size:10px;letter-spacing:2px;text-decoration:none;text-transform:uppercase;transition:all 0.2s">🔑 Admin Panel</a>
             <a href="/auth/logout" style="color:#666;font-size:9px;letter-spacing:1px;text-decoration:none">⏻ LOGOUT</a>
           </div>
         </div>
@@ -1412,6 +1405,8 @@
     let recordedChunks = [];
     let mediaRecorder;
     let recordingStartTime, recordingInterval;
+    let lastRecordingBlob = null;
+    let lastRecordingTitle = '';
     let transmissions = [];
     let audioInitialized = false;
 
@@ -1753,8 +1748,10 @@
           if (!isLive) return;
           const inputData = e.inputBuffer.getChannelData(0);
 
-          // Noise gate
-          if (gateEnabled) {
+          // Noise gate — only when no music/capture is playing (gate would chop music)
+          const musicPlaying = musicAudioElement && !musicAudioElement.paused;
+          const captureActive = !!systemAudioSource;
+          if (gateEnabled && !musicPlaying && !captureActive) {
             let rms = 0;
             for (let i = 0; i < inputData.length; i++) rms += inputData[i] * inputData[i];
             rms = Math.sqrt(rms / inputData.length);
@@ -2116,7 +2113,8 @@
         dot.classList.add('live');
         socket.emit('go-live', {
           name: document.getElementById('stationNameInput').value,
-          tagline: document.getElementById('stationTagline').value
+          tagline: document.getElementById('stationTagline').value,
+          sampleRate: currentSampleRate
         });
 
         const select = document.getElementById('inputDevice');
@@ -2195,6 +2193,10 @@
           const title = titleInput.value || `Transmission #${transmissions.length + 1}`;
           const duration = (Date.now() - recordingStartTime) / 1000;
 
+          lastRecordingBlob = blob;
+          lastRecordingTitle = title;
+          document.getElementById('saveToComputerBtn').style.display = 'inline-block';
+
           const reader = new FileReader();
           reader.onload = async () => {
             try {
@@ -2204,7 +2206,7 @@
                 body: JSON.stringify({ title, audioData: reader.result, duration })
               });
               const data = await res.json();
-              transmissions.push({ id: data.id, title, duration });
+              transmissions.push({ id: data.id, title, duration, audioData: reader.result });
               renderTransmissions();
               document.getElementById('statusText').textContent = `Saved: ${title} (${formatDuration(duration)})`;
             } catch (err) {
@@ -2253,6 +2255,36 @@
       }
     }
 
+    function saveRecordingToComputer() {
+      if (!lastRecordingBlob) return;
+      const ext = lastRecordingBlob.type.includes('mp4') ? 'mp4' : 'webm';
+      const filename = (lastRecordingTitle || 'recording').replace(/[^a-zA-Z0-9 _-]/g, '') + '.' + ext;
+      const url = URL.createObjectURL(lastRecordingBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      document.getElementById('statusText').textContent = 'Saved to Downloads: ' + filename;
+    }
+
+    function downloadTransmission(index) {
+      const t = transmissions[index];
+      if (!t || !t.audioData) {
+        document.getElementById('statusText').textContent = 'No audio data — recording was from a previous session';
+        return;
+      }
+      const a = document.createElement('a');
+      a.href = t.audioData;
+      const ext = t.audioData.startsWith('data:audio/mp4') ? 'mp4' : 'webm';
+      a.download = (t.title || 'transmission').replace(/[^a-zA-Z0-9 _-]/g, '') + '.' + ext;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+
     function renderTransmissions() {
       const list = document.getElementById('transmissionList');
       document.getElementById('transmissionCount').textContent = transmissions.length;
@@ -2260,13 +2292,14 @@
         list.innerHTML = '<div class="empty-state">No transmissions yet.<br>Record short clips to broadcast<br>on demand or schedule them.</div>';
         return;
       }
-      list.innerHTML = transmissions.map(t => `
+      list.innerHTML = transmissions.map((t, i) => `
         <div class="transmission-item" data-id="${t.id}">
           <div class="transmission-info">
             <div class="title">${t.title}</div>
             <div class="meta">${formatDuration(t.duration)}</div>
           </div>
           <div class="transmission-actions">
+            <button class="play-btn" onclick="downloadTransmission(${i})" title="Download" style="font-size:12px">💾</button>
             <button class="play-btn" onclick="playTransmission('${t.id}')" title="Broadcast">▶</button>
             <button class="delete-btn" onclick="deleteTransmission('${t.id}')" title="Delete">✕</button>
           </div>
@@ -2298,38 +2331,6 @@
       const tagline = document.getElementById('stationTagline').value;
       document.getElementById('stationName').textContent = name;
       socket.emit('update-station', { name, tagline });
-    }
-
-    async function changePassword() {
-      const cur = document.getElementById('currentPw').value;
-      const np = document.getElementById('newPw').value;
-      const cp = document.getElementById('confirmPw').value;
-      const msg = document.getElementById('pwMsg');
-      msg.style.color = '#ff4444';
-
-      if (!cur || !np || !cp) { msg.textContent = 'Fill in all fields'; return; }
-      if (np !== cp) { msg.textContent = 'New passwords do not match'; return; }
-      if (np.length < 4) { msg.textContent = 'Password must be at least 4 characters'; return; }
-
-      try {
-        const res = await fetch('/api/change-password', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ currentPassword: cur, newPassword: np })
-        });
-        const data = await res.json();
-        if (res.ok) {
-          msg.style.color = '#00ff88';
-          msg.textContent = '✓ Password changed';
-          document.getElementById('currentPw').value = '';
-          document.getElementById('newPw').value = '';
-          document.getElementById('confirmPw').value = '';
-        } else {
-          msg.textContent = data.error || 'Failed to change password';
-        }
-      } catch (e) {
-        msg.textContent = 'Network error';
-      }
     }
 
     // INIT
@@ -2603,6 +2604,9 @@
             systemAudioSource = audioContext.createMediaStreamSource(systemAudioStream);
             systemAudioGain = audioContext.createGain();
             systemAudioGain.gain.value = parseFloat(document.getElementById('musicVolume').value);
+            systemAudioGain.channelCount = 1;
+            systemAudioGain.channelCountMode = 'explicit';
+            systemAudioGain.channelInterpretation = 'speakers';
             systemAudioSource.connect(systemAudioGain);
             systemAudioGain.connect(limiterNode);
           }
@@ -2650,11 +2654,12 @@
 
         // Request screen/tab capture with audio
         systemAudioStream = await navigator.mediaDevices.getDisplayMedia({
-          video: { width: 1, height: 1 }, // minimal video — we only want audio
+          video: { width: 1, height: 1 },
           audio: {
             echoCancellation: false,
             noiseSuppression: false,
-            autoGainControl: false
+            autoGainControl: false,
+            channelCount: 2
           }
         });
 
@@ -2668,10 +2673,16 @@
           return;
         }
 
-        // Connect to audio chain
+        // Connect to audio chain — mix stereo down to mono properly
         systemAudioSource = audioContext.createMediaStreamSource(systemAudioStream);
+        const channelCount = systemAudioSource.channelCount || 2;
         systemAudioGain = audioContext.createGain();
         systemAudioGain.gain.value = parseFloat(document.getElementById('musicVolume').value);
+        if (channelCount > 1) {
+          systemAudioGain.channelCount = 1;
+          systemAudioGain.channelCountMode = 'explicit';
+          systemAudioGain.channelInterpretation = 'speakers';
+        }
         systemAudioSource.connect(systemAudioGain);
         systemAudioGain.connect(limiterNode);
 

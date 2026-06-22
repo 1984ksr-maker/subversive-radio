@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Subversive Radio — Admin</title>
+  <link rel="icon" type="image/png" href="/icon-192.png">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root { --red: #ff2d2d; --red-glow: rgba(255,45,45,0.4); --green: #00ff88; --amber: #ffaa00; --bg: #0a0a0a; --surface: #141414; --surface2: #1e1e1e; --text: #e0e0e0; --text-dim: #666; }
+    body { font-family: 'SF Mono','Fira Code','Courier New',monospace; background: var(--bg); color: var(--text); min-height: 100vh; padding: 20px; }
+    .container { max-width: 700px; margin: 0 auto; }
+    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid #222; }
+    .header h1 { font-size: 18px; letter-spacing: 4px; text-transform: uppercase; color: var(--amber); }
+    .header-links { display: flex; gap: 12px; }
+    .header-links a { color: var(--text-dim); text-decoration: none; font-size: 11px; letter-spacing: 1px; padding: 6px 12px; border: 1px solid #333; border-radius: 6px; transition: all 0.2s; }
+    .header-links a:hover { border-color: var(--text); color: var(--text); }
+
+    .section { background: var(--surface); border: 1px solid #222; border-radius: 12px; padding: 24px; margin-bottom: 20px; }
+    .section h2 { font-size: 13px; letter-spacing: 3px; text-transform: uppercase; color: var(--amber); margin-bottom: 16px; }
+
+    .create-form { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 20px; }
+    .form-field { display: flex; flex-direction: column; gap: 4px; }
+    .form-field label { font-size: 9px; color: var(--text-dim); letter-spacing: 1px; text-transform: uppercase; }
+    .form-field input, .form-field select { padding: 10px 12px; background: var(--bg); border: 1px solid #333; border-radius: 6px; color: var(--text); font-family: inherit; font-size: 12px; outline: none; }
+    .form-field input:focus, .form-field select:focus { border-color: var(--amber); }
+
+    .btn { padding: 10px 18px; border: 2px solid var(--amber); border-radius: 6px; background: rgba(255,170,0,0.1); color: var(--amber); font-family: inherit; font-size: 11px; font-weight: bold; letter-spacing: 2px; text-transform: uppercase; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
+    .btn:hover { background: var(--amber); color: #000; }
+    .btn-red { border-color: var(--red); color: var(--red); background: rgba(255,45,45,0.1); }
+    .btn-red:hover { background: var(--red); color: #fff; }
+    .btn-sm { padding: 6px 12px; font-size: 10px; }
+
+    .code-list { display: flex; flex-direction: column; gap: 8px; }
+    .code-item { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: var(--bg); border: 1px solid #222; border-radius: 8px; gap: 12px; }
+    .code-value { font-size: 16px; font-weight: bold; letter-spacing: 4px; color: var(--green); cursor: pointer; }
+    .code-value:hover { text-decoration: underline; }
+    .code-value.expired { color: var(--text-dim); text-decoration: line-through; }
+    .code-meta { font-size: 10px; color: var(--text-dim); display: flex; flex-direction: column; gap: 2px; flex: 1; }
+    .code-actions { display: flex; gap: 6px; }
+
+    .session-list { display: flex; flex-direction: column; gap: 6px; }
+    .session-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: var(--bg); border: 1px solid #222; border-radius: 6px; font-size: 11px; }
+    .session-role { padding: 2px 8px; border-radius: 4px; font-size: 9px; letter-spacing: 1px; text-transform: uppercase; }
+    .session-role.admin { background: rgba(255,170,0,0.15); color: var(--amber); }
+    .session-role.user { background: rgba(0,255,136,0.1); color: var(--green); }
+
+    .empty { color: var(--text-dim); font-size: 11px; text-align: center; padding: 20px; }
+    .status-msg { font-size: 11px; margin-top: 10px; padding: 8px 12px; border-radius: 6px; display: none; }
+    .status-msg.success { display: block; background: rgba(0,255,136,0.1); color: var(--green); border: 1px solid rgba(0,255,136,0.2); }
+    .status-msg.error { display: block; background: rgba(255,45,45,0.1); color: var(--red); border: 1px solid rgba(255,45,45,0.2); }
+
+    .pw-form { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+
+    @media (max-width: 600px) {
+      .create-form, .pw-form { flex-direction: column; }
+      .form-field { width: 100%; }
+      .form-field input, .form-field select { width: 100%; }
+      .btn { width: 100%; text-align: center; }
+      .code-item { flex-wrap: wrap; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🔑 Admin Panel</h1>
+      <div class="header-links">
+        <a href="/broadcaster">Broadcaster</a>
+        <a href="/auth/logout">Logout</a>
+      </div>
+    </div>
+
+    <!-- CREATE ACCESS CODE -->
+    <div class="section">
+      <h2>Create Access Code</h2>
+      <div class="create-form">
+        <div class="form-field" style="flex:1;min-width:120px">
+          <label>Label / Name</label>
+          <input type="text" id="codeLabel" placeholder="e.g. DJ Mike" value="">
+        </div>
+        <div class="form-field">
+          <label>Max Uses</label>
+          <select id="codeMaxUses">
+            <option value="0">Unlimited</option>
+            <option value="1" selected>1 use</option>
+            <option value="5">5 uses</option>
+            <option value="10">10 uses</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label>Expires In</label>
+          <select id="codeExpires">
+            <option value="0">Never</option>
+            <option value="1">1 hour</option>
+            <option value="6">6 hours</option>
+            <option value="24" selected>24 hours</option>
+            <option value="168">7 days</option>
+            <option value="720">30 days</option>
+          </select>
+        </div>
+        <button class="btn" onclick="createCode()">Generate</button>
+      </div>
+      <div id="createStatus" class="status-msg"></div>
+
+      <h2 style="margin-top:24px">Active Codes</h2>
+      <div id="codeList" class="code-list">
+        <div class="empty">Loading...</div>
+      </div>
+    </div>
+
+    <!-- ACTIVE SESSIONS -->
+    <div class="section">
+      <h2>Active Sessions</h2>
+      <div id="sessionList" class="session-list">
+        <div class="empty">Loading...</div>
+      </div>
+      <div style="margin-top:16px;display:flex;gap:10px">
+        <button class="btn btn-red btn-sm" onclick="revokeAll()">Revoke All Users</button>
+        <button class="btn btn-sm" onclick="loadSessions()">Refresh</button>
+      </div>
+    </div>
+
+    <!-- CHANGE ADMIN PASSWORD -->
+    <div class="section">
+      <h2>Change Admin Password</h2>
+      <div class="pw-form">
+        <div class="form-field" style="flex:1">
+          <label>Current Password</label>
+          <input type="password" id="currentPw" placeholder="Current">
+        </div>
+        <div class="form-field" style="flex:1">
+          <label>New Password</label>
+          <input type="password" id="newPw" placeholder="New (min 4 chars)">
+        </div>
+        <button class="btn" onclick="changePassword()">Update</button>
+      </div>
+      <div id="pwStatus" class="status-msg"></div>
+    </div>
+  </div>
+
+  <script>
+    const SERVER = window.location.origin;
+
+    async function createCode() {
+      const label = document.getElementById('codeLabel').value.trim();
+      const maxUses = parseInt(document.getElementById('codeMaxUses').value);
+      const expiresIn = parseInt(document.getElementById('codeExpires').value);
+      const status = document.getElementById('createStatus');
+
+      try {
+        const res = await fetch(`${SERVER}/api/admin/codes`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ label: label || 'Guest', maxUses, expiresIn })
+        });
+        const data = await res.json();
+        if (data.ok) {
+          status.className = 'status-msg success';
+          status.textContent = `Code created: ${data.code} — share this with your user`;
+          document.getElementById('codeLabel').value = '';
+          loadCodes();
+        } else {
+          status.className = 'status-msg error';
+          status.textContent = data.error;
+        }
+      } catch (e) {
+        status.className = 'status-msg error';
+        status.textContent = 'Failed to create code';
+      }
+    }
+
+    async function loadCodes() {
+      try {
+        const res = await fetch(`${SERVER}/api/admin/codes`);
+        const codes = await res.json();
+        const list = document.getElementById('codeList');
+        if (codes.length === 0) {
+          list.innerHTML = '<div class="empty">No access codes yet. Create one above.</div>';
+          return;
+        }
+        list.innerHTML = codes.map(c => {
+          const isExpired = c.expired || (c.maxUses && c.uses >= c.maxUses);
+          return `
+            <div class="code-item">
+              <span class="code-value ${isExpired ? 'expired' : ''}" onclick="copyCode('${c.code}')" title="Click to copy">${c.code}</span>
+              <div class="code-meta">
+                <span>${c.label}</span>
+                <span>Uses: ${c.uses}${c.maxUses ? '/' + c.maxUses : '/∞'}${c.lastUsed ? ' · Last: ' + new Date(c.lastUsed).toLocaleString() : ''}${isExpired ? ' · EXPIRED' : ''}</span>
+              </div>
+              <div class="code-actions">
+                <button class="btn btn-sm" onclick="copyCode('${c.code}')">Copy</button>
+                <button class="btn btn-red btn-sm" onclick="deleteCode('${c.code}')">✕</button>
+              </div>
+            </div>`;
+        }).join('');
+      } catch (e) {
+        document.getElementById('codeList').innerHTML = '<div class="empty">Failed to load codes</div>';
+      }
+    }
+
+    function copyCode(code) {
+      navigator.clipboard.writeText(code).then(() => {
+        const status = document.getElementById('createStatus');
+        status.className = 'status-msg success';
+        status.textContent = `Copied: ${code}`;
+        setTimeout(() => { status.className = 'status-msg'; }, 2000);
+      });
+    }
+
+    async function deleteCode(code) {
+      await fetch(`${SERVER}/api/admin/codes/${code}`, { method: 'DELETE' });
+      loadCodes();
+    }
+
+    async function loadSessions() {
+      try {
+        const res = await fetch(`${SERVER}/api/admin/sessions`);
+        const sessions = await res.json();
+        const list = document.getElementById('sessionList');
+        if (sessions.length === 0) {
+          list.innerHTML = '<div class="empty">No active sessions</div>';
+          return;
+        }
+        list.innerHTML = sessions.map(s => `
+          <div class="session-item">
+            <span>${s.label || 'Unknown'}</span>
+            <span style="color:var(--text-dim)">${s.expiresIn}</span>
+            <span class="session-role ${s.role}">${s.role}</span>
+          </div>
+        `).join('');
+      } catch (e) {
+        document.getElementById('sessionList').innerHTML = '<div class="empty">Failed to load</div>';
+      }
+    }
+
+    async function revokeAll() {
+      if (!confirm('Revoke all non-admin sessions? Users will need to re-enter their access code.')) return;
+      await fetch(`${SERVER}/api/admin/revoke-all`, { method: 'POST' });
+      loadSessions();
+    }
+
+    async function changePassword() {
+      const status = document.getElementById('pwStatus');
+      const currentPassword = document.getElementById('currentPw').value;
+      const newPassword = document.getElementById('newPw').value;
+      try {
+        const res = await fetch(`${SERVER}/api/change-password`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ currentPassword, newPassword })
+        });
+        const data = await res.json();
+        if (data.ok) {
+          status.className = 'status-msg success';
+          status.textContent = 'Admin password updated';
+          document.getElementById('currentPw').value = '';
+          document.getElementById('newPw').value = '';
+        } else {
+          status.className = 'status-msg error';
+          status.textContent = data.error;
+        }
+      } catch (e) {
+        status.className = 'status-msg error';
+        status.textContent = 'Failed to update password';
+      }
+    }
+
+    loadCodes();
+    loadSessions();
+    setInterval(loadSessions, 30000);
+  </script>
+</body>
+</html>

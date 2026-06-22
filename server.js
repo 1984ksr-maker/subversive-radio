@@ -31,35 +31,48 @@ const PORT = process.env.PORT || 3333;
 const IS_CLOUD = !!process.env.RENDER || !!process.env.RAILWAY_STATIC_URL || !!process.env.FLY_APP_NAME;
 let tunnelUrl = null;
 
-// ========== PASSWORD PROTECTION ==========
-let broadcasterPassword = process.env.BROADCASTER_PASSWORD || '123456';
-const activeSessions = new Map(); // token → expiry timestamp
+// ========== AUTH & ADMIN SYSTEM ==========
+let adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
+const activeSessions = new Map(); // token → { expiry, role, label }
+const accessCodes = new Map();    // code → { label, createdAt, usedBy, maxUses, uses, expiresAt }
 
 function generateToken() {
   return crypto.randomBytes(32).toString('hex');
 }
 
-function isAuthenticated(req) {
-  const token = req.query.token || req.headers['x-auth-token'];
-  // Check cookie
-  const cookies = (req.headers.cookie || '').split(';').reduce((acc, c) => {
+function generateCode() {
+  return crypto.randomBytes(4).toString('hex').toUpperCase();
+}
+
+function parseCookies(req) {
+  return (req.headers.cookie || '').split(';').reduce((acc, c) => {
     const [k, v] = c.trim().split('=');
     if (k && v) acc[k] = v;
     return acc;
   }, {});
-  const cookieToken = cookies['br_token'];
-  const t = token || cookieToken;
-  if (!t) return false;
-  const session = activeSessions.get(t);
-  if (!session) return false;
-  if (Date.now() > session.expiry) {
-    activeSessions.delete(t);
-    return false;
-  }
-  return true;
 }
 
-// Login page HTML
+function getSession(req) {
+  const cookies = parseCookies(req);
+  if (cookies['br_electron'] && !IS_CLOUD) return { role: 'admin' };
+  const t = req.query.token || req.headers['x-auth-token'] || cookies['br_token'];
+  if (!t) return null;
+  const session = activeSessions.get(t);
+  if (!session) return null;
+  if (Date.now() > session.expiry) { activeSessions.delete(t); return null; }
+  return session;
+}
+
+function isAuthenticated(req) {
+  return !!getSession(req);
+}
+
+function isAdmin(req) {
+  const s = getSession(req);
+  return s && s.role === 'admin';
+}
+
+// Login page HTML — supports access code and admin login
 function loginPageHTML(error = '', redirectTo = '/broadcaster') {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -69,13 +82,13 @@ function loginPageHTML(error = '', redirectTo = '/broadcaster') {
   <title>Subversive Radio — Access</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    :root { --red: #ff2d2d; --red-glow: rgba(255,45,45,0.4); --green: #00ff88; --bg: #0a0a0a; --surface: #141414; --surface2: #1e1e1e; --text: #e0e0e0; --text-dim: #666; }
+    :root { --red: #ff2d2d; --red-glow: rgba(255,45,45,0.4); --green: #00ff88; --amber: #ffaa00; --bg: #0a0a0a; --surface: #141414; --surface2: #1e1e1e; --text: #e0e0e0; --text-dim: #666; }
     body { font-family: 'SF Mono','Fira Code','Courier New',monospace; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; align-items: center; justify-content: center; }
-    .login-card { background: var(--surface); border: 1px solid #222; border-radius: 16px; padding: 48px 36px; width: 100%; max-width: 400px; margin: 20px; text-align: center; }
+    .login-card { background: var(--surface); border: 1px solid #222; border-radius: 16px; padding: 48px 36px; width: 100%; max-width: 420px; margin: 20px; text-align: center; }
     .logo { font-size: 22px; font-weight: bold; letter-spacing: 5px; text-transform: uppercase; color: var(--red); margin-bottom: 8px; }
     .subtitle { font-size: 11px; color: var(--text-dim); letter-spacing: 2px; margin-bottom: 32px; }
     .lock-icon { font-size: 40px; margin-bottom: 20px; }
-    .input-group { margin-bottom: 20px; }
+    .input-group { margin-bottom: 16px; }
     .input-group input { width: 100%; padding: 14px 16px; background: var(--bg); border: 1px solid #333; border-radius: 8px; color: var(--text); font-family: inherit; font-size: 14px; letter-spacing: 2px; text-align: center; outline: none; transition: border-color 0.2s; }
     .input-group input:focus { border-color: var(--red); }
     .input-group input::placeholder { color: #444; letter-spacing: 1px; }
@@ -84,6 +97,15 @@ function loginPageHTML(error = '', redirectTo = '/broadcaster') {
     .error { color: #ff4444; font-size: 11px; margin-bottom: 16px; padding: 10px; border: 1px solid #ff4444; border-radius: 6px; background: rgba(255,68,68,0.1); display: ${error ? 'block' : 'none'}; }
     .back-link { display: inline-block; margin-top: 20px; color: var(--text-dim); font-size: 10px; text-decoration: none; letter-spacing: 1px; }
     .back-link:hover { color: var(--text); }
+    .divider { display: flex; align-items: center; gap: 12px; margin: 24px 0; color: var(--text-dim); font-size: 10px; letter-spacing: 2px; }
+    .divider::before, .divider::after { content: ''; flex: 1; border-top: 1px solid #333; }
+    .admin-btn { width: 100%; padding: 12px; border: 1px solid #333; border-radius: 8px; background: transparent; color: var(--text-dim); font-family: inherit; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; cursor: pointer; transition: all 0.2s; }
+    .admin-btn:hover { border-color: var(--amber); color: var(--amber); }
+    .admin-form { display: none; margin-top: 16px; }
+    .admin-form.active { display: block; }
+    .admin-submit { width: 100%; padding: 12px; border: 2px solid var(--amber); border-radius: 8px; background: rgba(255,170,0,0.1); color: var(--amber); font-family: inherit; font-size: 12px; font-weight: bold; letter-spacing: 2px; text-transform: uppercase; cursor: pointer; transition: all 0.2s; }
+    .admin-submit:hover { background: var(--amber); color: #000; }
+    .label { font-size: 10px; color: var(--text-dim); letter-spacing: 1px; margin-bottom: 6px; text-align: left; }
   </style>
 </head>
 <body>
@@ -94,18 +116,31 @@ function loginPageHTML(error = '', redirectTo = '/broadcaster') {
     <div class="error">${error}</div>
     <form method="POST" action="/auth/login">
       <input type="hidden" name="redirect" value="${redirectTo}">
+      <input type="hidden" name="mode" value="code">
+      <div class="label">ACCESS CODE</div>
       <div class="input-group">
-        <input type="password" name="password" placeholder="Enter password" autofocus required>
+        <input type="text" name="code" placeholder="Enter access code" autofocus autocomplete="off" style="text-transform:uppercase">
       </div>
       <button type="submit" class="submit-btn">Enter</button>
     </form>
-    <a href="/" class="back-link">← Back to radio</a>
+    <div class="divider">OR</div>
+    <button class="admin-btn" onclick="document.getElementById('adminForm').classList.toggle('active')">🔑 Admin Login</button>
+    <form method="POST" action="/auth/login" class="admin-form" id="adminForm">
+      <input type="hidden" name="redirect" value="${redirectTo}">
+      <input type="hidden" name="mode" value="admin">
+      <div class="label">ADMIN PASSWORD</div>
+      <div class="input-group">
+        <input type="password" name="password" placeholder="Admin password">
+      </div>
+      <button type="submit" class="admin-submit">Admin Login</button>
+    </form>
+    <a href="/" class="back-link">&larr; Back to radio</a>
   </div>
 </body>
 </html>`;
 }
 
-// ========== END PASSWORD ==========
+// ========== END AUTH ==========
 
 let stationInfo = {
   name: 'SUBVERSIVE RADIO',
@@ -133,54 +168,128 @@ app.get('/auth/login', (req, res) => {
   res.send(loginPageHTML('', redirect));
 });
 
-// Login POST
+// Login POST — handles both access code and admin login
 app.post('/auth/login', (req, res) => {
-  const { password, redirect } = req.body;
+  const { mode, code, password, redirect } = req.body;
   const redirectTo = redirect || '/broadcaster';
 
-  if (password === broadcasterPassword) {
+  if (mode === 'admin') {
+    if (password === adminPassword) {
+      const token = generateToken();
+      activeSessions.set(token, { expiry: Date.now() + 24 * 60 * 60 * 1000, role: 'admin', label: 'Admin' });
+      res.setHeader('Set-Cookie', `br_token=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400`);
+      res.redirect(redirectTo);
+    } else {
+      res.send(loginPageHTML('Wrong admin password.', redirectTo));
+    }
+  } else {
+    const upperCode = (code || '').trim().toUpperCase();
+    const entry = accessCodes.get(upperCode);
+    if (!entry) {
+      return res.send(loginPageHTML('Invalid access code.', redirectTo));
+    }
+    if (entry.expiresAt && Date.now() > entry.expiresAt) {
+      return res.send(loginPageHTML('This code has expired.', redirectTo));
+    }
+    if (entry.maxUses && entry.uses >= entry.maxUses) {
+      return res.send(loginPageHTML('This code has reached its use limit.', redirectTo));
+    }
+    entry.uses++;
+    entry.lastUsed = new Date().toISOString();
     const token = generateToken();
-    // Session lasts 24 hours
-    activeSessions.set(token, { expiry: Date.now() + 24 * 60 * 60 * 1000 });
+    activeSessions.set(token, { expiry: Date.now() + 24 * 60 * 60 * 1000, role: 'user', label: entry.label || upperCode });
     res.setHeader('Set-Cookie', `br_token=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400`);
     res.redirect(redirectTo);
-  } else {
-    res.send(loginPageHTML('Wrong password. Try again.', redirectTo));
   }
 });
 
 // Logout
 app.get('/auth/logout', (req, res) => {
-  const cookies = (req.headers.cookie || '').split(';').reduce((acc, c) => {
-    const [k, v] = c.trim().split('=');
-    if (k && v) acc[k] = v;
-    return acc;
-  }, {});
+  const cookies = parseCookies(req);
   if (cookies.br_token) activeSessions.delete(cookies.br_token);
   res.setHeader('Set-Cookie', 'br_token=; Path=/; HttpOnly; Max-Age=0');
   res.redirect('/');
 });
 
-// Change password API
+// Change admin password (admin only)
 app.post('/api/change-password', (req, res) => {
-  if (!isAuthenticated(req)) return res.status(401).json({ error: 'Not authenticated' });
+  if (!isAdmin(req)) return res.status(403).json({ error: 'Admin access required' });
   const { currentPassword, newPassword } = req.body;
-  if (currentPassword !== broadcasterPassword) {
+  if (currentPassword !== adminPassword) {
     return res.status(403).json({ error: 'Current password is wrong' });
   }
   if (!newPassword || newPassword.length < 4) {
     return res.status(400).json({ error: 'New password must be at least 4 characters' });
   }
-  broadcasterPassword = newPassword;
-  // Invalidate all sessions so everyone re-logs with new password
+  adminPassword = newPassword;
+  res.json({ ok: true, message: 'Admin password changed' });
+});
+
+// ========== ADMIN API ==========
+
+// Create access code
+app.post('/api/admin/codes', (req, res) => {
+  if (!isAdmin(req)) return res.status(403).json({ error: 'Admin only' });
+  const { label, maxUses, expiresIn } = req.body;
+  const code = generateCode();
+  accessCodes.set(code, {
+    label: label || 'Guest',
+    createdAt: new Date().toISOString(),
+    maxUses: maxUses || 0,
+    uses: 0,
+    expiresAt: expiresIn ? Date.now() + expiresIn * 60 * 60 * 1000 : null,
+    lastUsed: null
+  });
+  res.json({ ok: true, code });
+});
+
+// List access codes
+app.get('/api/admin/codes', (req, res) => {
+  if (!isAdmin(req)) return res.status(403).json({ error: 'Admin only' });
+  const codes = [];
+  for (const [code, info] of accessCodes) {
+    codes.push({ code, ...info, expired: info.expiresAt ? Date.now() > info.expiresAt : false });
+  }
+  res.json(codes);
+});
+
+// Delete access code
+app.delete('/api/admin/codes/:code', (req, res) => {
+  if (!isAdmin(req)) return res.status(403).json({ error: 'Admin only' });
+  accessCodes.delete(req.params.code.toUpperCase());
+  res.json({ ok: true });
+});
+
+// List active sessions
+app.get('/api/admin/sessions', (req, res) => {
+  if (!isAdmin(req)) return res.status(403).json({ error: 'Admin only' });
+  const sessions = [];
+  for (const [token, info] of activeSessions) {
+    if (Date.now() < info.expiry) {
+      sessions.push({ token: token.slice(0, 8) + '...', role: info.role, label: info.label, expiresIn: Math.round((info.expiry - Date.now()) / 60000) + ' min' });
+    }
+  }
+  res.json(sessions);
+});
+
+// Revoke all non-admin sessions
+app.post('/api/admin/revoke-all', (req, res) => {
+  if (!isAdmin(req)) return res.status(403).json({ error: 'Admin only' });
+  const adminTokens = [];
+  for (const [token, info] of activeSessions) {
+    if (info.role === 'admin') adminTokens.push([token, info]);
+  }
   activeSessions.clear();
-  const token = generateToken();
-  activeSessions.set(token, { expiry: Date.now() + 24 * 60 * 60 * 1000 });
-  res.setHeader('Set-Cookie', `br_token=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400`);
-  res.json({ ok: true, message: 'Password changed' });
+  adminTokens.forEach(([t, i]) => activeSessions.set(t, i));
+  res.json({ ok: true, message: 'All user sessions revoked' });
 });
 
 // ========== PROTECTED PAGES ==========
+
+app.get('/admin', (req, res) => {
+  if (!isAdmin(req)) return res.redirect('/auth/login?redirect=/admin');
+  res.sendFile(path.join(__dirname, 'admin.html'));
+});
 
 app.get('/broadcaster', (req, res) => {
   if (!isAuthenticated(req)) {
@@ -292,6 +401,7 @@ io.on('connection', (socket) => {
     if (info) {
       stationInfo.name = info.name || stationInfo.name;
       stationInfo.tagline = info.tagline || stationInfo.tagline;
+      stationInfo.sampleRate = info.sampleRate || 44100;
     }
     io.to('listeners').emit('station-live', stationInfo);
     console.log(`🔴 LIVE: ${stationInfo.name} (${getListenerCount()} listeners)`);
@@ -405,7 +515,7 @@ function startTunnel() {
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`\n📡 Subversive Radio v1.0 — optimized for 100+ listeners`);
   console.log(`   Port: ${PORT}`);
-  console.log(`   🔒 Broadcaster password: ${broadcasterPassword}`);
+  console.log(`   🔑 Admin password: ${adminPassword}`);
   if (IS_CLOUD) {
     console.log('   ☁️  Cloud mode (no tunnel needed)');
   } else {

@@ -2,7 +2,8 @@
   "name": "subversive-radio",
   "version": "1.0.0",
   "description": "Live broadcasting desktop app with web listener and short transmissions",
-  "main": "server.js",
+  "author": "Subversive Radio",
+  "main": "main.js",
   "engines": {
     "node": ">=18.0.0"
   },
