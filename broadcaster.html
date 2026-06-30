@@ -1154,10 +1154,14 @@
 
             <!-- FILES SOURCE -->
             <div class="music-source" id="musicSourceFiles">
-              <div class="music-dropzone" id="musicDropzone" onclick="document.getElementById('musicFileInput').click()" ondrop="handleMusicDrop(event)" ondragover="event.preventDefault();this.classList.add('dragover')" ondragleave="this.classList.remove('dragover')">
-                <input type="file" id="musicFileInput" accept="audio/*" multiple style="display:none" onchange="handleMusicFiles(this.files)">
-                <div class="dropzone-text">Drop audio files here or click to browse</div>
-                <div class="dropzone-formats">MP3, WAV, OGG, FLAC, M4A</div>
+              <div class="music-dropzone" id="musicDropzone" ondrop="handleMusicDrop(event)" ondragover="event.preventDefault();this.classList.add('dragover')" ondragleave="this.classList.remove('dragover')">
+                <input type="file" id="musicFileInput" accept=".mp3,.wav,.ogg,.flac,.m4a,.aac,.wma,.opus,audio/*" multiple style="display:none" onchange="handleMusicFiles(this.files)">
+                <input type="file" id="musicFileBrowse" multiple style="display:none" onchange="handleMusicFiles(this.files)">
+                <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+                  <button onclick="document.getElementById('musicFileInput').click()" style="padding:12px 20px;background:var(--surface2);border:1px solid var(--green);border-radius:8px;color:var(--green);font-family:inherit;font-size:11px;letter-spacing:1px;cursor:pointer">🎵 MUSIC FILES</button>
+                  <button onclick="document.getElementById('musicFileBrowse').click()" style="padding:12px 20px;background:var(--surface2);border:1px solid var(--amber);border-radius:8px;color:var(--amber);font-family:inherit;font-size:11px;letter-spacing:1px;cursor:pointer">📂 BROWSE ALL FILES</button>
+                </div>
+                <div class="dropzone-formats" style="margin-top:8px">MP3, WAV, FLAC, M4A — on mobile tap BROWSE ALL FILES</div>
               </div>
             </div>
 
