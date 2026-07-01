@@ -1146,10 +1146,11 @@
           <h2>Music Player</h2>
           <div class="music-player">
             <!-- SOURCE TABS -->
-            <div style="display:flex;gap:6px;margin-bottom:12px">
+            <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
               <button class="source-btn active" id="musicTabFiles" onclick="showMusicSource('files')" style="flex:1;padding:10px;font-size:10px">📁 FILES</button>
-              <button class="source-btn" id="musicTabCapture" onclick="showMusicSource('capture')" style="flex:1;padding:10px;font-size:10px">🎵 CAPTURE APP</button>
+              <button class="source-btn" id="musicTabRadio" onclick="showMusicSource('radio')" style="flex:1;padding:10px;font-size:10px">📻 RADIO</button>
               <button class="source-btn" id="musicTabUrl" onclick="showMusicSource('url')" style="flex:1;padding:10px;font-size:10px">🔗 URL</button>
+              <button class="source-btn" id="musicTabCapture" onclick="showMusicSource('capture')" style="flex:1;padding:10px;font-size:10px">🎵 CAPTURE</button>
             </div>
 
             <!-- FILES SOURCE -->
@@ -1162,6 +1163,36 @@
                   <button onclick="document.getElementById('musicFileBrowse').click()" style="padding:12px 20px;background:var(--surface2);border:1px solid var(--amber);border-radius:8px;color:var(--amber);font-family:inherit;font-size:11px;letter-spacing:1px;cursor:pointer">📂 BROWSE ALL FILES</button>
                 </div>
                 <div class="dropzone-formats" style="margin-top:8px">MP3, WAV, FLAC, M4A — on mobile tap BROWSE ALL FILES</div>
+              </div>
+            </div>
+
+            <!-- RADIO STREAMS SOURCE -->
+            <div class="music-source" id="musicSourceRadio" style="display:none">
+              <div style="padding:8px 0">
+                <div style="font-size:10px;color:var(--amber);letter-spacing:1px;margin-bottom:10px">FREE INTERNET RADIO — TAP TO PLAY & BROADCAST</div>
+                <div id="radioStations" style="display:flex;flex-direction:column;gap:6px">
+                  <button class="btn" onclick="playRadioStream('https://stream.laut.fm/lofi','Lo-Fi Beats')" style="text-align:left;padding:10px 14px;border-color:#333;color:var(--text)">🎧 Lo-Fi Beats <span style="color:var(--text-dim);font-size:9px">— chill / study</span></button>
+                  <button class="btn" onclick="playRadioStream('https://stream.laut.fm/jazz','Jazz FM')" style="text-align:left;padding:10px 14px;border-color:#333;color:var(--text)">🎷 Jazz FM <span style="color:var(--text-dim);font-size:9px">— smooth jazz</span></button>
+                  <button class="btn" onclick="playRadioStream('https://stream.laut.fm/electronica','Electronica')" style="text-align:left;padding:10px 14px;border-color:#333;color:var(--text)">⚡ Electronica <span style="color:var(--text-dim);font-size:9px">— electronic / ambient</span></button>
+                  <button class="btn" onclick="playRadioStream('https://stream.laut.fm/dub','Dub Radio')" style="text-align:left;padding:10px 14px;border-color:#333;color:var(--text)">🔊 Dub Radio <span style="color:var(--text-dim);font-size:9px">— dub / reggae</span></button>
+                  <button class="btn" onclick="playRadioStream('https://stream.laut.fm/soul','Soul Station')" style="text-align:left;padding:10px 14px;border-color:#333;color:var(--text)">🎤 Soul Station <span style="color:var(--text-dim);font-size:9px">— soul / funk</span></button>
+                  <button class="btn" onclick="playRadioStream('https://stream.laut.fm/hiphop','Hip Hop')" style="text-align:left;padding:10px 14px;border-color:#333;color:var(--text)">🎤 Hip Hop <span style="color:var(--text-dim);font-size:9px">— rap / hip hop</span></button>
+                  <button class="btn" onclick="playRadioStream('https://stream.laut.fm/classicrock','Classic Rock')" style="text-align:left;padding:10px 14px;border-color:#333;color:var(--text)">🎸 Classic Rock <span style="color:var(--text-dim);font-size:9px">— rock legends</span></button>
+                  <button class="btn" onclick="playRadioStream('https://stream.laut.fm/ambient','Ambient')" style="text-align:left;padding:10px 14px;border-color:#333;color:var(--text)">🌊 Ambient <span style="color:var(--text-dim);font-size:9px">— soundscapes / chill</span></button>
+                </div>
+                <div style="margin-top:12px;border-top:1px solid #222;padding-top:12px">
+                  <div style="font-size:10px;color:var(--text-dim);margin-bottom:6px">CUSTOM STREAM URL</div>
+                  <div style="display:flex;gap:6px">
+                    <input type="text" id="customRadioUrl" placeholder="Paste any radio stream URL..." style="flex:1">
+                    <button class="btn" onclick="playRadioStream(document.getElementById('customRadioUrl').value,'Custom Stream')" style="border-color:var(--green);color:var(--green);width:auto;padding:8px 16px">PLAY</button>
+                  </div>
+                </div>
+                <div id="radioNowPlaying" style="display:none;margin-top:10px;padding:10px;background:var(--bg);border:1px solid var(--green);border-radius:6px">
+                  <div style="display:flex;align-items:center;justify-content:space-between">
+                    <span style="font-size:11px;color:var(--green)" id="radioPlayingName">● Playing</span>
+                    <button class="btn" onclick="stopRadioStream()" style="width:auto;padding:4px 12px;border-color:var(--red);color:var(--red);font-size:9px">STOP</button>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -2609,6 +2640,7 @@
       const val = parseFloat(document.getElementById('musicVolume').value);
       document.getElementById('musicVolVal').textContent = Math.round(val * 100) + '%';
       if (musicGainNode) smoothGain(musicGainNode.gain, val);
+      if (radioGainNode) smoothGain(radioGainNode.gain, val);
       if (systemAudioGain) smoothGain(systemAudioGain.gain, val);
       musicTargetVol = val;
     }
@@ -2632,13 +2664,16 @@
 
     function showMusicSource(tab) {
       document.querySelectorAll('.music-source').forEach(el => el.style.display = 'none');
-      document.getElementById('musicTabFiles').classList.remove('active');
-      document.getElementById('musicTabCapture').classList.remove('active');
-      document.getElementById('musicTabUrl').classList.remove('active');
+      document.querySelectorAll('.source-btn').forEach(b => {
+        if (b.id && b.id.startsWith('musicTab')) b.classList.remove('active');
+      });
 
       if (tab === 'files') {
         document.getElementById('musicSourceFiles').style.display = 'block';
         document.getElementById('musicTabFiles').classList.add('active');
+      } else if (tab === 'radio') {
+        document.getElementById('musicSourceRadio').style.display = 'block';
+        document.getElementById('musicTabRadio').classList.add('active');
       } else if (tab === 'capture') {
         document.getElementById('musicSourceCapture').style.display = 'block';
         document.getElementById('musicTabCapture').classList.add('active');
@@ -2646,6 +2681,58 @@
         document.getElementById('musicSourceUrl').style.display = 'block';
         document.getElementById('musicTabUrl').classList.add('active');
       }
+    }
+
+    let radioAudioElement = null;
+    let radioSourceNode = null;
+    let radioGainNode = null;
+
+    async function playRadioStream(url, name) {
+      if (!url) return;
+      stopRadioStream();
+
+      if (!audioContext) {
+        try { await initAudio(); } catch(e) {}
+      }
+      if (!audioContext) return;
+      if (audioContext.state === 'suspended') audioContext.resume();
+
+      radioAudioElement = new Audio();
+      radioAudioElement.crossOrigin = 'anonymous';
+      radioAudioElement.src = url;
+      radioAudioElement.volume = 0;
+
+      try {
+        await radioAudioElement.play();
+        radioSourceNode = audioContext.createMediaElementSource(radioAudioElement);
+        radioGainNode = audioContext.createGain();
+        radioGainNode.gain.value = parseFloat(document.getElementById('musicVolume').value);
+        radioSourceNode.connect(radioGainNode);
+        radioGainNode.connect(limiterNode);
+
+        document.getElementById('radioNowPlaying').style.display = 'block';
+        document.getElementById('radioPlayingName').textContent = '● ' + name;
+      } catch(e) {
+        console.error('Radio stream failed:', e);
+        document.getElementById('radioNowPlaying').style.display = 'block';
+        document.getElementById('radioPlayingName').textContent = '✕ Failed — stream may be blocked on mobile';
+        document.getElementById('radioPlayingName').style.color = 'var(--red)';
+        setTimeout(() => {
+          document.getElementById('radioNowPlaying').style.display = 'none';
+          document.getElementById('radioPlayingName').style.color = 'var(--green)';
+        }, 3000);
+      }
+    }
+
+    function stopRadioStream() {
+      if (radioAudioElement) {
+        radioAudioElement.pause();
+        radioAudioElement.src = '';
+        radioAudioElement = null;
+      }
+      if (radioSourceNode) { try { radioSourceNode.disconnect(); } catch(e) {} radioSourceNode = null; }
+      if (radioGainNode) { try { radioGainNode.disconnect(); } catch(e) {} radioGainNode = null; }
+      document.getElementById('radioNowPlaying').style.display = 'none';
     }
 
     async function startAppCapture() {
