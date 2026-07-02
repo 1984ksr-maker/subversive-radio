@@ -2526,11 +2526,8 @@
     function connectMusicToChain() {
       if (!audioContext || !musicAudioElement) return;
 
-      // Create music source node (only once per element)
       if (!musicSourceNode) {
         musicSourceNode = audioContext.createMediaElementSource(musicAudioElement);
-        musicAudioElement.volume = 0;
-        musicAudioElement.muted = false;
         musicGainNode = audioContext.createGain();
         musicGainNode.gain.value = parseFloat(document.getElementById('musicVolume').value);
         musicSourceNode.connect(musicGainNode);
@@ -2544,10 +2541,14 @@
         try { await initAudio(); } catch(e) {}
       }
       if (!audioContext) return;
-      if (audioContext.state === 'suspended') audioContext.resume();
+      if (audioContext.state === 'suspended') await audioContext.resume();
       connectMusicToChain();
-      musicAudioElement.play().catch(() => {});
-      document.getElementById('musicPlayBtn').textContent = '⏸';
+      try {
+        await musicAudioElement.play();
+        document.getElementById('musicPlayBtn').textContent = '⏸';
+      } catch(e) {
+        document.getElementById('statusText').textContent = 'Music play failed: ' + e.message;
+      }
     }
 
     function stopMusic() {
@@ -2700,29 +2701,24 @@
       if (audioContext.state === 'suspended') audioContext.resume();
 
       radioAudioElement = new Audio();
-      radioAudioElement.crossOrigin = 'anonymous';
       radioAudioElement.src = SERVER + '/api/stream-proxy?url=' + encodeURIComponent(url);
-      radioAudioElement.volume = 0;
+
+      radioSourceNode = audioContext.createMediaElementSource(radioAudioElement);
+      radioGainNode = audioContext.createGain();
+      radioGainNode.gain.value = parseFloat(document.getElementById('musicVolume').value);
+      radioSourceNode.connect(radioGainNode);
+      radioGainNode.connect(limiterNode);
 
       try {
         await radioAudioElement.play();
-        radioSourceNode = audioContext.createMediaElementSource(radioAudioElement);
-        radioGainNode = audioContext.createGain();
-        radioGainNode.gain.value = parseFloat(document.getElementById('musicVolume').value);
-        radioSourceNode.connect(radioGainNode);
-        radioGainNode.connect(limiterNode);
-
         document.getElementById('radioNowPlaying').style.display = 'block';
         document.getElementById('radioPlayingName').textContent = '● ' + name;
+        document.getElementById('radioPlayingName').style.color = 'var(--green)';
       } catch(e) {
         console.error('Radio stream failed:', e);
         document.getElementById('radioNowPlaying').style.display = 'block';
-        document.getElementById('radioPlayingName').textContent = '✕ Failed — stream may be blocked on mobile';
+        document.getElementById('radioPlayingName').textContent = '✕ ' + e.message;
         document.getElementById('radioPlayingName').style.color = 'var(--red)';
-        setTimeout(() => {
-          document.getElementById('radioNowPlaying').style.display = 'none';
-          document.getElementById('radioPlayingName').style.color = 'var(--green)';
-        }, 3000);
       }
     }
 
