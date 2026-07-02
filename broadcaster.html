@@ -2688,7 +2688,9 @@
     let radioGainNode = null;
 
     async function playRadioStream(url, name) {
-      if (!url) return;
+      if (!url || !url.trim()) return;
+      url = url.trim();
+      if (!url.startsWith('http://') && !url.startsWith('https://')) url = 'https://' + url;
       stopRadioStream();
 
       if (!audioContext) {
