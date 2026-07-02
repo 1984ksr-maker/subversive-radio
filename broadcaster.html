@@ -936,7 +936,8 @@
 
     <div class="mobile-tabs" id="mobileTabs">
       <button class="active" onclick="showMobileTab('mixer')">MIXER</button>
-      <button onclick="showMobileTab('transmissions')">TRANSMISSIONS</button>
+      <button onclick="showMobileTab('chat')">💬 CHAT</button>
+      <button onclick="showMobileTab('transmissions')">TRANS</button>
     </div>
 
     <div class="main">
@@ -1390,28 +1391,53 @@
 
       </div>
 
-      <!-- SIDEBAR: TRANSMISSIONS + SETTINGS -->
+      <!-- SIDEBAR: CHAT + TRANSMISSIONS + SETTINGS -->
       <div class="sidebar" id="tabTransmissions">
-        <div class="sidebar-header">
-          <h2>Short Transmissions</h2>
-          <div class="record-controls">
-            <button class="record-btn" id="recordBtn" onclick="toggleRecord()">● RECORD</button>
-            <button class="record-btn" id="saveToComputerBtn" onclick="saveRecordingToComputer()" style="display:none;border-color:var(--green);color:var(--green);font-size:10px">💾 SAVE</button>
-          </div>
-          <div class="recording-timer" id="recordingTimer">00:00</div>
-          <input type="text" class="title-input" id="transmissionTitle" placeholder="Transmission title...">
+        <!-- Sidebar tabs (desktop) -->
+        <div style="display:flex;border-bottom:1px solid #222" id="sidebarTabs">
+          <button onclick="showSidebarTab('chat')" id="sidebarTabChat" style="flex:1;padding:10px;background:var(--red);border:none;color:#fff;font-family:inherit;font-size:10px;letter-spacing:1px;cursor:pointer">💬 CHAT</button>
+          <button onclick="showSidebarTab('trans')" id="sidebarTabTrans" style="flex:1;padding:10px;background:transparent;border:none;border-left:1px solid #222;color:var(--text-dim);font-family:inherit;font-size:10px;letter-spacing:1px;cursor:pointer">TRANSMISSIONS</button>
+          <button onclick="showSidebarTab('settings')" id="sidebarTabSettings" style="flex:1;padding:10px;background:transparent;border:none;border-left:1px solid #222;color:var(--text-dim);font-family:inherit;font-size:10px;letter-spacing:1px;cursor:pointer">SETTINGS</button>
         </div>
-        <div class="transmission-list" id="transmissionList">
-          <div class="empty-state">No transmissions yet.<br>Record short clips to broadcast<br>on demand or schedule them.</div>
-        </div>
-        <div class="station-settings-compact">
-          <h2>Station Settings</h2>
-          <input type="text" id="stationNameInput" placeholder="Station name" value="SUBVERSIVE RADIO" onchange="updateStation()">
-          <input type="text" id="stationTagline" placeholder="Tagline" value="Broadcasting from the underground" onchange="updateStation()">
 
-          <div style="margin-top:16px;padding-top:16px;border-top:1px solid #333;text-align:center;display:flex;flex-direction:column;gap:8px">
-            <a href="/admin" style="display:block;padding:10px;border:1px solid #ffaa00;border-radius:6px;color:#ffaa00;font-size:10px;letter-spacing:2px;text-decoration:none;text-transform:uppercase;transition:all 0.2s">🔑 Admin Panel</a>
-            <a href="/auth/logout" style="color:#666;font-size:9px;letter-spacing:1px;text-decoration:none">⏻ LOGOUT</a>
+        <!-- CHAT PANEL -->
+        <div id="sidebarChat" style="display:flex;flex-direction:column;flex:1;overflow:hidden">
+          <div id="djChatMessages" style="flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:6px"></div>
+          <div style="padding:8px;border-top:1px solid #222">
+            <div style="display:flex;gap:6px">
+              <input type="text" id="djChatInput" placeholder="Message as DJ..." maxlength="500" style="flex:1;background:var(--bg);border:1px solid #333;border-radius:6px;padding:8px 10px;color:var(--text);font-family:inherit;font-size:11px;outline:none" onkeydown="if(event.key==='Enter')sendDJChat()">
+              <button onclick="sendDJChat()" style="padding:8px 14px;background:var(--red);border:none;border-radius:6px;color:#fff;font-family:inherit;font-size:10px;letter-spacing:1px;cursor:pointer">SEND</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- TRANSMISSIONS PANEL -->
+        <div id="sidebarTrans" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+          <div class="sidebar-header">
+            <h2>Short Transmissions</h2>
+            <div class="record-controls">
+              <button class="record-btn" id="recordBtn" onclick="toggleRecord()">● RECORD</button>
+              <button class="record-btn" id="saveToComputerBtn" onclick="saveRecordingToComputer()" style="display:none;border-color:var(--green);color:var(--green);font-size:10px">💾 SAVE</button>
+            </div>
+            <div class="recording-timer" id="recordingTimer">00:00</div>
+            <input type="text" class="title-input" id="transmissionTitle" placeholder="Transmission title...">
+          </div>
+          <div class="transmission-list" id="transmissionList">
+            <div class="empty-state">No transmissions yet.<br>Record short clips to broadcast<br>on demand or schedule them.</div>
+          </div>
+        </div>
+
+        <!-- SETTINGS PANEL -->
+        <div id="sidebarSettings" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+          <div class="station-settings-compact">
+            <h2>Station Settings</h2>
+            <input type="text" id="stationNameInput" placeholder="Station name" value="SUBVERSIVE RADIO" onchange="updateStation()">
+            <input type="text" id="stationTagline" placeholder="Tagline" value="Broadcasting from the underground" onchange="updateStation()">
+
+            <div style="margin-top:16px;padding-top:16px;border-top:1px solid #333;text-align:center;display:flex;flex-direction:column;gap:8px">
+              <a href="/admin" style="display:block;padding:10px;border:1px solid #ffaa00;border-radius:6px;color:#ffaa00;font-size:10px;letter-spacing:2px;text-decoration:none;text-transform:uppercase;transition:all 0.2s">🔑 Admin Panel</a>
+              <a href="/auth/logout" style="color:#666;font-size:9px;letter-spacing:1px;text-decoration:none">⏻ LOGOUT</a>
+            </div>
           </div>
         </div>
       </div>
@@ -3315,9 +3341,73 @@
       if (tab === 'mixer') {
         mixer.classList.add('mobile-visible');
         buttons[0].classList.add('active');
-      } else {
+      } else if (tab === 'chat') {
         transmissions.classList.add('mobile-visible');
         buttons[1].classList.add('active');
+        showSidebarTab('chat');
+      } else {
+        transmissions.classList.add('mobile-visible');
+        buttons[2].classList.add('active');
+        showSidebarTab('trans');
+      }
+    }
+
+    // ========== LIVE CHAT (BROADCASTER) ==========
+    function escapeChat(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    function formatChatTime(iso) {
+      const d = new Date(iso);
+      return d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
+    }
+
+    function addDJChatMessage(msg) {
+      const msgs = document.getElementById('djChatMessages');
+      const div = document.createElement('div');
+      div.dataset.id = msg.id;
+      div.style.cssText = 'font-size:11px;padding:6px 10px;border-radius:8px;max-width:90%;word-break:break-word;' +
+        (msg.isDJ ? 'background:rgba(255,45,45,0.15);border:1px solid rgba(255,45,45,0.3);align-self:flex-end;' : 'background:var(--surface2);align-self:flex-start;');
+      div.innerHTML =
+        '<div style="font-size:9px;letter-spacing:1px;margin-bottom:2px;color:' + (msg.isDJ ? 'var(--red)' : 'var(--green)') + '">' + escapeChat(msg.from) + '</div>' +
+        '<div style="color:var(--text)">' + escapeChat(msg.text) + '</div>' +
+        '<div style="font-size:8px;color:#444;margin-top:2px">' + formatChatTime(msg.time) + '</div>';
+      msgs.appendChild(div);
+      msgs.scrollTop = msgs.scrollHeight;
+
+      // Flash the chat tab on mobile if not active
+      const chatBtn = document.querySelectorAll('.mobile-tabs button')[1];
+      if (chatBtn && !chatBtn.classList.contains('active') && !msg.isDJ) {
+        chatBtn.style.color = 'var(--red)';
+        setTimeout(() => { chatBtn.style.color = ''; }, 2000);
+      }
+    }
+
+    function sendDJChat() {
+      const input = document.getElementById('djChatInput');
+      const text = input.value.trim();
+      if (!text) return;
+      socket.emit('chat-message', { text });
+      input.value = '';
+    }
+
+    socket.on('chat-message', addDJChatMessage);
+
+    function showSidebarTab(tab) {
+      document.getElementById('sidebarChat').style.display = tab === 'chat' ? 'flex' : 'none';
+      document.getElementById('sidebarTrans').style.display = tab === 'trans' ? 'flex' : 'none';
+      document.getElementById('sidebarSettings').style.display = tab === 'settings' ? 'flex' : 'none';
+      document.getElementById('sidebarTabChat').style.background = tab === 'chat' ? 'var(--red)' : 'transparent';
+      document.getElementById('sidebarTabChat').style.color = tab === 'chat' ? '#fff' : 'var(--text-dim)';
+      document.getElementById('sidebarTabTrans').style.background = tab === 'trans' ? 'var(--surface2)' : 'transparent';
+      document.getElementById('sidebarTabTrans').style.color = tab === 'trans' ? 'var(--text)' : 'var(--text-dim)';
+      document.getElementById('sidebarTabSettings').style.background = tab === 'settings' ? 'var(--surface2)' : 'transparent';
+      document.getElementById('sidebarTabSettings').style.color = tab === 'settings' ? 'var(--text)' : 'var(--text-dim)';
+      if (tab === 'chat') {
+        const msgs = document.getElementById('djChatMessages');
+        msgs.scrollTop = msgs.scrollHeight;
       }
     }
 

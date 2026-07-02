@@ -581,6 +581,27 @@ io.on('connection', (socket) => {
     io.to('listeners').emit('station-info', stationInfo);
   });
 
+  // LIVE CHAT
+  socket.on('chat-message', (msg) => {
+    if (!msg || !msg.text || typeof msg.text !== 'string') return;
+    const text = msg.text.trim().slice(0, 500);
+    if (!text) return;
+    const chatMsg = {
+      id: Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+      text,
+      from: isBroadcaster ? 'DJ' : (msg.name || 'Listener').slice(0, 20),
+      isDJ: isBroadcaster,
+      time: new Date().toISOString()
+    };
+    io.to('listeners').emit('chat-message', chatMsg);
+    io.to('broadcaster').emit('chat-message', chatMsg);
+  });
+
+  socket.on('chat-pin', (msgId) => {
+    if (!isBroadcaster) return;
+    io.to('listeners').emit('chat-pin', msgId);
+  });
+
   socket.on('disconnect', (reason) => {
     if (isListener) {
       const count = getListenerCount();

@@ -353,12 +353,130 @@
 
     .listeners-count span { color: var(--green); }
 
+    .chat-toggle {
+      width: 100%;
+      padding: 10px;
+      background: var(--surface2);
+      border: 1px solid #333;
+      border-radius: 8px;
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 10px;
+      letter-spacing: 2px;
+      cursor: pointer;
+      transition: all 0.3s;
+      margin-top: 8px;
+    }
+    .chat-toggle:hover, .chat-toggle.active { border-color: var(--red); color: var(--red); }
+    .chat-toggle .chat-badge { display: inline-block; background: var(--red); color: #fff; border-radius: 10px; padding: 1px 6px; font-size: 9px; margin-left: 6px; }
+
+    .chat-panel {
+      display: none;
+      width: 100%;
+      margin-top: 8px;
+      border: 1px solid #222;
+      border-radius: 10px;
+      background: var(--surface);
+      overflow: hidden;
+    }
+    .chat-panel.open { display: block; }
+    .chat-messages {
+      height: 250px;
+      overflow-y: auto;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .chat-msg {
+      font-size: 11px;
+      line-height: 1.5;
+      padding: 6px 10px;
+      border-radius: 8px;
+      background: var(--surface2);
+      max-width: 85%;
+      word-break: break-word;
+    }
+    .chat-msg.dj {
+      background: rgba(255, 45, 45, 0.15);
+      border: 1px solid rgba(255, 45, 45, 0.3);
+      align-self: flex-start;
+    }
+    .chat-msg.listener { align-self: flex-end; }
+    .chat-msg .chat-name {
+      font-size: 9px;
+      letter-spacing: 1px;
+      margin-bottom: 2px;
+    }
+    .chat-msg.dj .chat-name { color: var(--red); }
+    .chat-msg.listener .chat-name { color: var(--green); }
+    .chat-msg .chat-text { color: var(--text); }
+    .chat-msg .chat-time { font-size: 8px; color: #444; margin-top: 2px; }
+    .chat-pinned {
+      display: none;
+      padding: 8px 12px;
+      background: rgba(255, 170, 0, 0.1);
+      border-bottom: 1px solid rgba(255, 170, 0, 0.2);
+      font-size: 10px;
+      color: var(--amber);
+    }
+    .chat-pinned.active { display: block; }
+    .chat-input-row {
+      display: flex;
+      gap: 6px;
+      padding: 8px 12px;
+      border-top: 1px solid #222;
+    }
+    .chat-input-row input {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid #333;
+      border-radius: 6px;
+      padding: 8px 10px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 11px;
+      outline: none;
+    }
+    .chat-input-row input:focus { border-color: var(--red); }
+    .chat-input-row button {
+      padding: 8px 14px;
+      background: var(--red);
+      border: none;
+      border-radius: 6px;
+      color: #fff;
+      font-family: inherit;
+      font-size: 10px;
+      letter-spacing: 1px;
+      cursor: pointer;
+    }
+    .chat-name-input {
+      padding: 8px 12px;
+      border-bottom: 1px solid #222;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .chat-name-input label { font-size: 9px; color: var(--text-dim); letter-spacing: 1px; }
+    .chat-name-input input {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid #333;
+      border-radius: 4px;
+      padding: 5px 8px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 10px;
+      outline: none;
+    }
+
     @media (max-width: 520px) {
       .radio { padding: 10px; }
       .radio-body { padding: 28px 20px; }
       .station-name { font-size: 18px; letter-spacing: 4px; }
       .visualizer-ring { width: 180px; height: 180px; }
       .tune-in-btn { width: 110px; height: 110px; font-size: 10px; }
+      .chat-messages { height: 200px; }
     }
   </style>
 </head>
@@ -405,6 +523,21 @@
           <span id="statusText">Connecting...</span>
         </div>
         <span id="timeDisplay">—</span>
+      </div>
+
+      <button class="chat-toggle" id="chatToggle" onclick="toggleChat()">💬 LIVE CHAT</button>
+
+      <div class="chat-panel" id="chatPanel">
+        <div class="chat-name-input">
+          <label>NAME</label>
+          <input type="text" id="chatName" placeholder="Your name..." maxlength="20" value="">
+        </div>
+        <div class="chat-pinned" id="chatPinned"></div>
+        <div class="chat-messages" id="chatMessages"></div>
+        <div class="chat-input-row">
+          <input type="text" id="chatInput" placeholder="Type a message..." maxlength="500" onkeydown="if(event.key==='Enter')sendChat()">
+          <button onclick="sendChat()">SEND</button>
+        </div>
       </div>
 
     </div>
@@ -455,6 +588,7 @@
           nextPlayTime = 0;
           document.getElementById('statusText').textContent = 'Reconnected — resuming...';
         }
+        setupChat();
       });
 
       socket.on('disconnect', (reason) => {
@@ -891,6 +1025,83 @@
         }
       }
     });
+
+    // ========== LIVE CHAT ==========
+    let chatOpen = false;
+    let unreadCount = 0;
+
+    function toggleChat() {
+      chatOpen = !chatOpen;
+      document.getElementById('chatPanel').classList.toggle('open', chatOpen);
+      document.getElementById('chatToggle').classList.toggle('active', chatOpen);
+      if (chatOpen) {
+        unreadCount = 0;
+        updateChatBadge();
+        document.getElementById('chatInput').focus();
+        const msgs = document.getElementById('chatMessages');
+        msgs.scrollTop = msgs.scrollHeight;
+      }
+    }
+
+    function updateChatBadge() {
+      const btn = document.getElementById('chatToggle');
+      if (unreadCount > 0 && !chatOpen) {
+        btn.innerHTML = '💬 LIVE CHAT <span class="chat-badge">' + unreadCount + '</span>';
+      } else {
+        btn.textContent = '💬 LIVE CHAT';
+      }
+    }
+
+    function escapeChat(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    function formatChatTime(iso) {
+      const d = new Date(iso);
+      return d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
+    }
+
+    function addChatMessage(msg) {
+      const msgs = document.getElementById('chatMessages');
+      const div = document.createElement('div');
+      div.className = 'chat-msg ' + (msg.isDJ ? 'dj' : 'listener');
+      div.dataset.id = msg.id;
+      div.innerHTML =
+        '<div class="chat-name">' + escapeChat(msg.from) + '</div>' +
+        '<div class="chat-text">' + escapeChat(msg.text) + '</div>' +
+        '<div class="chat-time">' + formatChatTime(msg.time) + '</div>';
+      msgs.appendChild(div);
+      msgs.scrollTop = msgs.scrollHeight;
+
+      if (!chatOpen) {
+        unreadCount++;
+        updateChatBadge();
+      }
+    }
+
+    function sendChat() {
+      const input = document.getElementById('chatInput');
+      const text = input.value.trim();
+      if (!text) return;
+      const name = document.getElementById('chatName').value.trim() || 'Listener';
+      socket.emit('chat-message', { text, name });
+      input.value = '';
+    }
+
+    // Listen for chat events after socket connects
+    function setupChat() {
+      socket.on('chat-message', addChatMessage);
+      socket.on('chat-pin', (msgId) => {
+        const pinned = document.getElementById('chatPinned');
+        const msg = document.querySelector('.chat-msg[data-id="' + msgId + '"]');
+        if (msg) {
+          pinned.innerHTML = '📌 ' + msg.querySelector('.chat-text').textContent;
+          pinned.classList.add('active');
+        }
+      });
+    }
 
     // Start connection
     connectSocket();
