@@ -2699,7 +2699,7 @@
 
       radioAudioElement = new Audio();
       radioAudioElement.crossOrigin = 'anonymous';
-      radioAudioElement.src = url;
+      radioAudioElement.src = SERVER + '/api/stream-proxy?url=' + encodeURIComponent(url);
       radioAudioElement.volume = 0;
 
       try {

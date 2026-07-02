@@ -370,6 +370,35 @@ app.delete('/api/transmissions/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+// Audio stream proxy — bypasses CORS for radio streams
+app.get('/api/stream-proxy', (req, res) => {
+  if (!isAuthenticated(req)) return res.status(401).json({ error: 'Unauthorized' });
+  const streamUrl = req.query.url;
+  if (!streamUrl || !streamUrl.startsWith('http')) return res.status(400).json({ error: 'Invalid URL' });
+
+  const proto = streamUrl.startsWith('https') ? require('https') : require('http');
+  const request = proto.get(streamUrl, { headers: { 'User-Agent': 'SubversiveRadio/1.0' } }, (upstream) => {
+    if (upstream.statusCode >= 300 && upstream.statusCode < 400 && upstream.headers.location) {
+      return res.redirect('/api/stream-proxy?url=' + encodeURIComponent(upstream.headers.location));
+    }
+    if (upstream.statusCode !== 200) {
+      return res.status(502).json({ error: 'Stream returned ' + upstream.statusCode });
+    }
+    res.setHeader('Content-Type', upstream.headers['content-type'] || 'audio/mpeg');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'no-cache');
+    upstream.pipe(res);
+    req.on('close', () => upstream.destroy());
+  });
+  request.on('error', (e) => {
+    if (!res.headersSent) res.status(502).json({ error: 'Stream unreachable' });
+  });
+  request.setTimeout(10000, () => {
+    request.destroy();
+    if (!res.headersSent) res.status(504).json({ error: 'Stream timeout' });
+  });
+});
+
 // Embeddable mini player
 app.get('/embed', (req, res) => {
   res.setHeader('X-Frame-Options', 'ALLOWALL');
