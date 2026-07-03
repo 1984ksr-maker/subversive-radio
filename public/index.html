@@ -1102,6 +1102,13 @@
           pinned.classList.add('active');
         }
       });
+      socket.on('chat-delete', (msgId) => {
+        const el = document.querySelector('.chat-msg[data-id="' + msgId + '"]');
+        if (el) el.remove();
+      });
+      socket.on('chat-clear', () => {
+        document.getElementById('chatMessages').innerHTML = '';
+      });
     }
 
     // Start connection

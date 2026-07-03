@@ -304,6 +304,13 @@ app.get('/broadcaster', (req, res) => {
   res.sendFile(path.join(__dirname, 'broadcaster.html'));
 });
 
+app.get('/cohost', (req, res) => {
+  if (!isAuthenticated(req)) {
+    return res.redirect('/auth/login?redirect=/cohost');
+  }
+  res.sendFile(path.join(__dirname, 'broadcaster.html'));
+});
+
 app.get('/download', (req, res) => {
   if (!isAuthenticated(req)) {
     return res.redirect('/auth/login?redirect=/download');
@@ -507,10 +514,12 @@ function getListenerCount() {
 
 // ========== SOCKET.IO — OPTIMIZED FOR 100+ LISTENERS ==========
 let broadcasterSocketId = null;
+const mutedUsers = new Set();
 
 io.on('connection', (socket) => {
   const clientIp = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
   let isBroadcaster = false;
+  let isCoHost = false;
   let isListener = false;
 
   // BROADCASTER
@@ -523,6 +532,15 @@ io.on('connection', (socket) => {
     if (tunnelUrl) socket.emit('tunnel-url', tunnelUrl);
   });
 
+  // CO-HOST — second broadcaster that can also send audio
+  socket.on('join-cohost', () => {
+    socket.join('broadcaster');
+    isCoHost = true;
+    console.log('🎙️  Co-host connected');
+    socket.emit('listener-count', getListenerCount());
+    socket.emit('station-info', stationInfo);
+  });
+
   // LISTENER
   socket.on('join-listener', () => {
     socket.join('listeners');
@@ -533,9 +551,9 @@ io.on('connection', (socket) => {
     socket.emit('station-info', stationInfo);
   });
 
-  // AUDIO STREAM — uses volatile emit to DROP packets instead of queuing
-  // This prevents memory buildup when listeners have slow connections
+  // AUDIO STREAM — both broadcaster and co-host can send audio
   socket.on('audio-stream', (data) => {
+    if (!isBroadcaster && !isCoHost) return;
     io.to('listeners').volatile.emit('audio-stream', data);
   });
 
@@ -586,11 +604,13 @@ io.on('connection', (socket) => {
     if (!msg || !msg.text || typeof msg.text !== 'string') return;
     const text = msg.text.trim().slice(0, 500);
     if (!text) return;
+    const from = (isBroadcaster || isCoHost) ? 'DJ' : (msg.name || 'Listener').slice(0, 20);
+    if (mutedUsers.has(from)) return;
     const chatMsg = {
       id: Date.now() + '-' + Math.random().toString(36).slice(2, 6),
       text,
-      from: isBroadcaster ? 'DJ' : (msg.name || 'Listener').slice(0, 20),
-      isDJ: isBroadcaster,
+      from,
+      isDJ: isBroadcaster || isCoHost,
       time: new Date().toISOString()
     };
     io.to('listeners').emit('chat-message', chatMsg);
@@ -600,6 +620,30 @@ io.on('connection', (socket) => {
   socket.on('chat-pin', (msgId) => {
     if (!isBroadcaster) return;
     io.to('listeners').emit('chat-pin', msgId);
+  });
+
+  socket.on('chat-delete', (msgId) => {
+    if (!isBroadcaster) return;
+    io.to('listeners').emit('chat-delete', msgId);
+    io.to('broadcaster').emit('chat-delete', msgId);
+  });
+
+  socket.on('chat-mute', (userName) => {
+    if (!isBroadcaster) return;
+    mutedUsers.add(userName);
+    io.to('broadcaster').emit('chat-muted', userName);
+  });
+
+  socket.on('chat-unmute', (userName) => {
+    if (!isBroadcaster) return;
+    mutedUsers.delete(userName);
+    io.to('broadcaster').emit('chat-unmuted', userName);
+  });
+
+  socket.on('chat-clear', () => {
+    if (!isBroadcaster) return;
+    io.to('listeners').emit('chat-clear');
+    io.to('broadcaster').emit('chat-clear');
   });
 
   socket.on('disconnect', (reason) => {
@@ -612,6 +656,9 @@ io.on('connection', (socket) => {
       broadcasterSocketId = null;
       io.to('listeners').emit('station-offline');
       console.log('🎙️  Broadcaster disconnected');
+    }
+    if (isCoHost) {
+      console.log('🎙️  Co-host disconnected');
     }
   });
 
