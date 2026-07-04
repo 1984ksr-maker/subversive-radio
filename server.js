@@ -576,7 +576,6 @@ io.on('connection', (socket) => {
 
   // CO-HOST — remote mic controlled by host
   socket.on('join-cohost', (info) => {
-    socket.join('broadcaster');
     isCoHost = true;
     cohostSocketId = socket.id;
     cohostMicAllowed = false;
@@ -585,7 +584,10 @@ io.on('connection', (socket) => {
     socket.emit('listener-count', getListenerCount());
     socket.emit('station-info', stationInfo);
     socket.emit('cohost-mic-state', false);
-    io.to('broadcaster').emit('cohost-joined', { id: socket.id, name });
+    // Notify broadcaster directly (not via room, to avoid co-host receiving it)
+    if (broadcasterSocketId) {
+      io.to(broadcasterSocketId).emit('cohost-joined', { id: socket.id, name });
+    }
   });
 
   socket.on('cohost-mic-toggle', (allowed) => {
@@ -729,7 +731,9 @@ io.on('connection', (socket) => {
       cohostBuffer = null;
       cohostMicAllowed = false;
       if (!broadcasterSocketId) stopMixInterval();
-      io.to('broadcaster').emit('cohost-left');
+      if (broadcasterSocketId) {
+        io.to(broadcasterSocketId).emit('cohost-left');
+      }
       console.log('🎙️  Co-host disconnected');
     }
   });
