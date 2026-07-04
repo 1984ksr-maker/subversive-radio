@@ -305,9 +305,6 @@ app.get('/broadcaster', (req, res) => {
 });
 
 app.get('/cohost', (req, res) => {
-  if (!isAuthenticated(req)) {
-    return res.redirect('/auth/login?redirect=/cohost');
-  }
   res.sendFile(path.join(__dirname, 'cohost.html'));
 });
 
