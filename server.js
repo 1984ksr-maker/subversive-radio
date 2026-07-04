@@ -520,6 +520,12 @@ let broadcasterBuffer = null;
 let cohostBuffer = null;
 let mixInterval = null;
 
+function toInt16Array(buf) {
+  if (buf instanceof Int16Array) return buf;
+  if (Buffer.isBuffer(buf)) return new Int16Array(buf.buffer, buf.byteOffset, buf.byteLength / 2);
+  return new Int16Array(buf);
+}
+
 function startMixInterval() {
   if (mixInterval) return;
   mixInterval = setInterval(() => {
@@ -527,8 +533,8 @@ function startMixInterval() {
 
     let out;
     if (broadcasterBuffer && cohostBuffer) {
-      const a = new Int16Array(broadcasterBuffer);
-      const b = new Int16Array(cohostBuffer);
+      const a = toInt16Array(broadcasterBuffer);
+      const b = toInt16Array(cohostBuffer);
       const len = Math.max(a.length, b.length);
       out = new Int16Array(len);
       for (let i = 0; i < len; i++) {
@@ -538,14 +544,14 @@ function startMixInterval() {
       cohostBuffer = null;
       broadcasterBuffer = null;
     } else if (broadcasterBuffer) {
-      out = new Int16Array(broadcasterBuffer);
+      out = toInt16Array(broadcasterBuffer);
       broadcasterBuffer = null;
     } else {
-      out = new Int16Array(cohostBuffer);
+      out = toInt16Array(cohostBuffer);
       cohostBuffer = null;
     }
 
-    io.to('listeners').volatile.emit('audio-stream', out.buffer);
+    io.to('listeners').volatile.emit('audio-stream', Buffer.from(out.buffer));
   }, 80);
 }
 
