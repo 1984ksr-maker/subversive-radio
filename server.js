@@ -515,54 +515,6 @@ let cohostSocketId = null;
 let cohostMicAllowed = false;
 const mutedUsers = new Set();
 
-// Audio mixing state — prevents interleaved streams from breaking playback
-let broadcasterBuffer = null;
-let cohostBuffer = null;
-let mixInterval = null;
-
-function toInt16Array(buf) {
-  if (buf instanceof Int16Array) return buf;
-  if (Buffer.isBuffer(buf)) return new Int16Array(buf.buffer, buf.byteOffset, buf.byteLength / 2);
-  return new Int16Array(buf);
-}
-
-function startMixInterval() {
-  if (mixInterval) return;
-  mixInterval = setInterval(() => {
-    if (!broadcasterBuffer && !cohostBuffer) return;
-
-    let out;
-    if (broadcasterBuffer && cohostBuffer) {
-      const a = toInt16Array(broadcasterBuffer);
-      const b = toInt16Array(cohostBuffer);
-      const len = Math.max(a.length, b.length);
-      out = new Int16Array(len);
-      for (let i = 0; i < len; i++) {
-        const mixed = (i < a.length ? a[i] : 0) + (i < b.length ? b[i] : 0);
-        out[i] = Math.max(-32768, Math.min(32767, mixed));
-      }
-      cohostBuffer = null;
-      broadcasterBuffer = null;
-    } else if (broadcasterBuffer) {
-      out = toInt16Array(broadcasterBuffer);
-      broadcasterBuffer = null;
-    } else {
-      out = toInt16Array(cohostBuffer);
-      cohostBuffer = null;
-    }
-
-    io.to('listeners').volatile.emit('audio-stream', Buffer.from(out.buffer));
-  }, 80);
-}
-
-function stopMixInterval() {
-  if (mixInterval) {
-    clearInterval(mixInterval);
-    mixInterval = null;
-  }
-  broadcasterBuffer = null;
-  cohostBuffer = null;
-}
 
 io.on('connection', (socket) => {
   const clientIp = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
@@ -602,9 +554,6 @@ io.on('connection', (socket) => {
     if (cohostSocketId) {
       io.to(cohostSocketId).emit('cohost-mic-state', cohostMicAllowed);
     }
-    if (!cohostMicAllowed) {
-      cohostBuffer = null;
-    }
   });
 
   // LISTENER
@@ -617,18 +566,11 @@ io.on('connection', (socket) => {
     socket.emit('station-info', stationInfo);
   });
 
-  // AUDIO STREAM — mix broadcaster + co-host when both are active
+  // AUDIO STREAM — forward directly, no server-side mixing
   socket.on('audio-stream', (data) => {
     if (!isBroadcaster && !isCoHost) return;
     if (isCoHost && !cohostMicAllowed) return;
-
-    if (cohostSocketId && broadcasterSocketId && cohostMicAllowed) {
-      if (isBroadcaster) broadcasterBuffer = data;
-      else cohostBuffer = data;
-      startMixInterval();
-    } else {
-      io.to('listeners').volatile.emit('audio-stream', data);
-    }
+    io.to('listeners').volatile.emit('audio-stream', data);
   });
 
   // STATION CONTROLS
@@ -729,14 +671,11 @@ io.on('connection', (socket) => {
       stationInfo.isLive = false;
       broadcasterSocketId = null;
       io.to('listeners').emit('station-offline');
-      if (!cohostSocketId) stopMixInterval();
       console.log('🎙️  Broadcaster disconnected');
     }
     if (isCoHost && cohostSocketId === socket.id) {
       cohostSocketId = null;
-      cohostBuffer = null;
       cohostMicAllowed = false;
-      if (!broadcasterSocketId) stopMixInterval();
       if (broadcasterSocketId) {
         io.to(broadcasterSocketId).emit('cohost-left');
       }
