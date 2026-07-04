@@ -308,7 +308,7 @@ app.get('/cohost', (req, res) => {
   if (!isAuthenticated(req)) {
     return res.redirect('/auth/login?redirect=/cohost');
   }
-  res.sendFile(path.join(__dirname, 'broadcaster.html'));
+  res.sendFile(path.join(__dirname, 'cohost.html'));
 });
 
 app.get('/download', (req, res) => {
@@ -515,6 +515,7 @@ function getListenerCount() {
 // ========== SOCKET.IO — OPTIMIZED FOR 100+ LISTENERS ==========
 let broadcasterSocketId = null;
 let cohostSocketId = null;
+let cohostMicAllowed = false;
 const mutedUsers = new Set();
 
 // Audio mixing state — prevents interleaved streams from breaking playback
@@ -576,14 +577,29 @@ io.on('connection', (socket) => {
     if (tunnelUrl) socket.emit('tunnel-url', tunnelUrl);
   });
 
-  // CO-HOST — second broadcaster that can also send audio
-  socket.on('join-cohost', () => {
+  // CO-HOST — remote mic controlled by host
+  socket.on('join-cohost', (info) => {
     socket.join('broadcaster');
     isCoHost = true;
     cohostSocketId = socket.id;
-    console.log('🎙️  Co-host connected');
+    cohostMicAllowed = false;
+    const name = (info && info.name) ? info.name.slice(0, 20) : 'Co-Host';
+    console.log('🎙️  Co-host connected:', name);
     socket.emit('listener-count', getListenerCount());
     socket.emit('station-info', stationInfo);
+    socket.emit('cohost-mic-state', false);
+    io.to('broadcaster').emit('cohost-joined', { id: socket.id, name });
+  });
+
+  socket.on('cohost-mic-toggle', (allowed) => {
+    if (!isBroadcaster) return;
+    cohostMicAllowed = !!allowed;
+    if (cohostSocketId) {
+      io.to(cohostSocketId).emit('cohost-mic-state', cohostMicAllowed);
+    }
+    if (!cohostMicAllowed) {
+      cohostBuffer = null;
+    }
   });
 
   // LISTENER
@@ -599,14 +615,13 @@ io.on('connection', (socket) => {
   // AUDIO STREAM — mix broadcaster + co-host when both are active
   socket.on('audio-stream', (data) => {
     if (!isBroadcaster && !isCoHost) return;
+    if (isCoHost && !cohostMicAllowed) return;
 
-    if (cohostSocketId && broadcasterSocketId) {
-      // Both connected — buffer and mix server-side
+    if (cohostSocketId && broadcasterSocketId && cohostMicAllowed) {
       if (isBroadcaster) broadcasterBuffer = data;
       else cohostBuffer = data;
       startMixInterval();
     } else {
-      // Solo — pass through directly (zero overhead)
       io.to('listeners').volatile.emit('audio-stream', data);
     }
   });
@@ -715,7 +730,9 @@ io.on('connection', (socket) => {
     if (isCoHost && cohostSocketId === socket.id) {
       cohostSocketId = null;
       cohostBuffer = null;
+      cohostMicAllowed = false;
       if (!broadcasterSocketId) stopMixInterval();
+      io.to('broadcaster').emit('cohost-left');
       console.log('🎙️  Co-host disconnected');
     }
   });

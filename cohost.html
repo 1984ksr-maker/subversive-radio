@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Co-Host Mic — Subversive Radio</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0a0a0a;
+      color: #e0e0e0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      min-height: 100dvh;
+      padding: 20px;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    .logo {
+      font-size: 11px;
+      letter-spacing: 4px;
+      color: #555;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .title {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      color: #ff3333;
+      margin-bottom: 30px;
+    }
+
+    .status-box {
+      background: #111;
+      border: 1px solid #222;
+      border-radius: 12px;
+      padding: 16px 24px;
+      text-align: center;
+      margin-bottom: 30px;
+      width: 100%;
+      max-width: 320px;
+    }
+
+    .status-label {
+      font-size: 9px;
+      letter-spacing: 2px;
+      color: #555;
+      margin-bottom: 6px;
+    }
+
+    .status-text {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 1px;
+    }
+
+    .status-text.waiting { color: #ffaa00; }
+    .status-text.allowed { color: #00ff88; }
+    .status-text.muted { color: #ff3333; }
+    .status-text.offline { color: #555; }
+
+    .mic-btn {
+      width: 160px;
+      height: 160px;
+      border-radius: 50%;
+      border: 3px solid #333;
+      background: #1a1a1a;
+      color: #555;
+      font-size: 48px;
+      cursor: pointer;
+      transition: all 0.3s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .mic-btn.ready {
+      border-color: #00ff88;
+      color: #00ff88;
+      background: #0a1a10;
+    }
+
+    .mic-btn.live {
+      border-color: #ff3333;
+      color: #ff3333;
+      background: #1a0a0a;
+      box-shadow: 0 0 40px rgba(255,51,51,0.3);
+      animation: pulse-live 2s ease-in-out infinite;
+    }
+
+    .mic-btn.disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
+    @keyframes pulse-live {
+      0%, 100% { box-shadow: 0 0 20px rgba(255,51,51,0.2); }
+      50% { box-shadow: 0 0 50px rgba(255,51,51,0.4); }
+    }
+
+    .mic-label {
+      font-size: 11px;
+      letter-spacing: 2px;
+      color: #555;
+      margin-top: 16px;
+      text-transform: uppercase;
+    }
+
+    .mic-label.live { color: #ff3333; font-weight: 700; }
+
+    .level-bar-container {
+      width: 100%;
+      max-width: 320px;
+      height: 8px;
+      background: #111;
+      border-radius: 4px;
+      margin-top: 30px;
+      overflow: hidden;
+      border: 1px solid #222;
+    }
+
+    .level-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #00ff88 0%, #ffaa00 70%, #ff3333 90%);
+      border-radius: 4px;
+      transition: width 0.05s linear;
+    }
+
+    .name-input-row {
+      margin-top: 30px;
+      width: 100%;
+      max-width: 320px;
+    }
+
+    .name-input-row label {
+      font-size: 9px;
+      letter-spacing: 2px;
+      color: #555;
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    .name-input-row input {
+      width: 100%;
+      background: #111;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: #e0e0e0;
+      font-family: inherit;
+      font-size: 14px;
+      text-align: center;
+      outline: none;
+    }
+
+    .name-input-row input:focus { border-color: #ff3333; }
+
+    .info {
+      margin-top: 30px;
+      font-size: 10px;
+      color: #444;
+      text-align: center;
+      line-height: 1.6;
+      max-width: 280px;
+    }
+
+    .connection-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #ff3333;
+      display: inline-block;
+      margin-right: 6px;
+    }
+
+    .connection-dot.connected { background: #00ff88; }
+  </style>
+</head>
+<body>
+
+  <div class="logo">Subversive Radio</div>
+  <div class="title">CO-HOST MIC</div>
+
+  <div class="status-box">
+    <div class="status-label">STATUS</div>
+    <div class="status-text offline" id="statusText">
+      <span class="connection-dot" id="connDot"></span>
+      Connecting...
+    </div>
+  </div>
+
+  <button class="mic-btn disabled" id="micBtn" onclick="toggleMic()">
+    🎙️
+  </button>
+  <div class="mic-label" id="micLabel">WAITING FOR HOST</div>
+
+  <div class="level-bar-container">
+    <div class="level-bar" id="levelBar"></div>
+  </div>
+
+  <div class="name-input-row">
+    <label>YOUR NAME</label>
+    <input type="text" id="cohostName" placeholder="Co-Host" maxlength="20" value="Co-Host">
+  </div>
+
+  <div class="info">
+    The host controls your mic. When they allow it, tap the mic button to start talking. Your audio will be mixed with the main broadcast.
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io(window.location.origin);
+    let audioContext, mediaStream, sourceNode, analyserNode, processorNode;
+    let micActive = false;
+    let micAllowed = false;
+    let connected = false;
+
+    socket.on('connect', () => {
+      connected = true;
+      document.getElementById('connDot').classList.add('connected');
+      const name = document.getElementById('cohostName').value.trim() || 'Co-Host';
+      socket.emit('join-cohost', { name });
+      updateStatus();
+    });
+
+    socket.on('disconnect', () => {
+      connected = false;
+      document.getElementById('connDot').classList.remove('connected');
+      micAllowed = false;
+      if (micActive) stopMic();
+      updateStatus();
+    });
+
+    socket.on('cohost-mic-state', (allowed) => {
+      micAllowed = allowed;
+      if (!allowed && micActive) stopMic();
+      updateStatus();
+    });
+
+    function updateStatus() {
+      const el = document.getElementById('statusText');
+      const btn = document.getElementById('micBtn');
+      const label = document.getElementById('micLabel');
+
+      el.className = 'status-text';
+      btn.className = 'mic-btn';
+
+      if (!connected) {
+        el.innerHTML = '<span class="connection-dot" id="connDot"></span>Disconnected';
+        el.classList.add('offline');
+        btn.classList.add('disabled');
+        label.textContent = 'NO CONNECTION';
+        label.className = 'mic-label';
+      } else if (micActive) {
+        el.innerHTML = '<span class="connection-dot connected" id="connDot"></span>MIC IS LIVE';
+        el.classList.add('allowed');
+        btn.classList.add('live');
+        label.textContent = 'TAP TO MUTE';
+        label.className = 'mic-label live';
+      } else if (micAllowed) {
+        el.innerHTML = '<span class="connection-dot connected" id="connDot"></span>Host enabled your mic';
+        el.classList.add('allowed');
+        btn.classList.add('ready');
+        label.textContent = 'TAP TO TALK';
+        label.className = 'mic-label';
+      } else {
+        el.innerHTML = '<span class="connection-dot connected" id="connDot"></span>Waiting for host...';
+        el.classList.add('waiting');
+        btn.classList.add('disabled');
+        label.textContent = 'WAITING FOR HOST';
+        label.className = 'mic-label';
+      }
+    }
+
+    async function toggleMic() {
+      if (!micAllowed) return;
+      if (micActive) {
+        stopMic();
+      } else {
+        await startMic();
+      }
+      updateStatus();
+    }
+
+    async function startMic() {
+      try {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 44100 });
+        await audioContext.resume();
+
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+        });
+
+        sourceNode = audioContext.createMediaStreamSource(mediaStream);
+        analyserNode = audioContext.createAnalyser();
+        analyserNode.fftSize = 256;
+
+        const bufferSize = 4096;
+        processorNode = audioContext.createScriptProcessor(bufferSize, 1, 1);
+
+        sourceNode.connect(analyserNode);
+        analyserNode.connect(processorNode);
+        const silentDest = audioContext.createMediaStreamDestination();
+        processorNode.connect(silentDest);
+
+        processorNode.onaudioprocess = (e) => {
+          if (!micActive || !micAllowed) return;
+          const inputData = e.inputBuffer.getChannelData(0);
+          const pcmData = new Int16Array(inputData.length);
+          for (let i = 0; i < inputData.length; i++) {
+            const s = Math.max(-1, Math.min(1, inputData[i]));
+            pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+          }
+          socket.emit('audio-stream', pcmData.buffer);
+        };
+
+        micActive = true;
+        drawLevel();
+      } catch (err) {
+        alert('Mic access denied: ' + err.message);
+      }
+    }
+
+    function stopMic() {
+      micActive = false;
+      if (mediaStream) {
+        mediaStream.getTracks().forEach(t => t.stop());
+        mediaStream = null;
+      }
+      if (audioContext) {
+        audioContext.close().catch(() => {});
+        audioContext = null;
+      }
+      sourceNode = null;
+      analyserNode = null;
+      processorNode = null;
+      document.getElementById('levelBar').style.width = '0%';
+    }
+
+    function drawLevel() {
+      if (!analyserNode || !micActive) return;
+      const data = new Uint8Array(analyserNode.frequencyBinCount);
+      analyserNode.getByteFrequencyData(data);
+      let sum = 0;
+      for (let i = 0; i < data.length; i++) sum += data[i];
+      const avg = sum / data.length;
+      const pct = Math.min(100, (avg / 128) * 100);
+      document.getElementById('levelBar').style.width = pct + '%';
+      requestAnimationFrame(drawLevel);
+    }
+
+    // Keep screen awake
+    let wakeLock = null;
+    async function requestWakeLock() {
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLock = await navigator.wakeLock.request('screen');
+        }
+      } catch (e) {}
+    }
+    requestWakeLock();
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') requestWakeLock();
+    });
+  </script>
+</body>
+</html>

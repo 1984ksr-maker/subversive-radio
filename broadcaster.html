@@ -1441,7 +1441,19 @@
                 <input type="text" id="cohostLink" readonly style="flex:1;background:var(--surface);border:1px solid #333;border-radius:4px;color:var(--text);font-size:10px;padding:6px 8px;font-family:monospace" />
                 <button onclick="navigator.clipboard.writeText(document.getElementById('cohostLink').value).then(()=>{this.textContent='✓';setTimeout(()=>{this.textContent='COPY'},1500)})" style="background:var(--green);color:#000;border:none;border-radius:4px;padding:6px 10px;font-size:9px;letter-spacing:1px;cursor:pointer;font-family:inherit">COPY</button>
               </div>
-              <div style="font-size:8px;color:#555;margin-top:4px">Share this link so a co-host can broadcast audio alongside you</div>
+              <div style="font-size:8px;color:#555;margin-top:4px">Share this link — co-host only gets a mic button, you control it</div>
+            </div>
+
+            <div id="cohostPanel" style="margin-top:16px;padding-top:16px;border-top:1px solid #333;display:none">
+              <div style="font-size:9px;letter-spacing:1px;color:var(--text-dim);margin-bottom:8px">CO-HOST STATUS</div>
+              <div id="cohostStatus" style="display:flex;align-items:center;gap:10px;background:var(--surface2);border-radius:8px;padding:10px 14px">
+                <div style="width:10px;height:10px;border-radius:50%;background:var(--green);flex-shrink:0" id="cohostDot"></div>
+                <div style="flex:1">
+                  <div style="font-size:12px;font-weight:600" id="cohostNameDisplay">Co-Host</div>
+                  <div style="font-size:9px;color:#666" id="cohostMicStatus">Mic off</div>
+                </div>
+                <button id="cohostMicBtn" onclick="toggleCohostMic()" style="padding:8px 14px;border-radius:6px;border:none;font-family:inherit;font-size:10px;letter-spacing:1px;cursor:pointer;background:#333;color:var(--text-dim);transition:all 0.2s">ALLOW MIC</button>
+              </div>
             </div>
 
             <div style="margin-top:16px;padding-top:16px;border-top:1px solid #333;text-align:center;display:flex;flex-direction:column;gap:8px">
@@ -1504,22 +1516,15 @@
     // Convert linear gain to dB
     function gainToDb(gain) { return gain > 0 ? 20 * Math.log10(gain) : -Infinity; }
 
-    // Detect co-host mode
-    const isCoHost = window.location.pathname === '/cohost';
-    if (isCoHost) {
-      document.querySelector('.header h1').textContent = 'CO-HOST';
-      document.getElementById('onAirBadge').textContent = 'CO-HOST';
-    }
-
     // Set co-host link
     const cohostLinkEl = document.getElementById('cohostLink');
     if (cohostLinkEl) cohostLinkEl.value = window.location.origin + '/cohost';
 
     // Socket events
     socket.on('connect', () => {
-      socket.emit(isCoHost ? 'join-cohost' : 'join-broadcaster');
+      socket.emit('join-broadcaster');
       document.getElementById('statusDot').classList.add('connected');
-      document.getElementById('statusText').textContent = isCoHost ? 'Connected as CO-HOST' : 'Connected to server';
+      document.getElementById('statusText').textContent = 'Connected to server';
       loadAllInputDevices();
     });
 
@@ -1666,7 +1671,7 @@
           const dot = document.getElementById('statusDot');
           btn.textContent = 'GO LIVE';
           btn.classList.remove('live');
-          badge.textContent = isCoHost ? 'CO-HOST' : 'OFF AIR';
+          badge.textContent = 'OFF AIR';
           badge.classList.remove('live');
           dot.classList.remove('live');
         }
@@ -3463,6 +3468,46 @@
       const msgs = document.querySelectorAll('#djChatMessages [data-from="' + name + '"]');
       msgs.forEach(m => { m.style.opacity = '0.3'; });
     });
+
+    // ========== CO-HOST CONTROL ==========
+    let cohostMicOn = false;
+
+    socket.on('cohost-joined', (info) => {
+      document.getElementById('cohostPanel').style.display = 'block';
+      document.getElementById('cohostNameDisplay').textContent = info.name || 'Co-Host';
+      document.getElementById('cohostMicStatus').textContent = 'Mic off — tap ALLOW MIC to enable';
+      cohostMicOn = false;
+      updateCohostBtn();
+    });
+
+    socket.on('cohost-left', () => {
+      document.getElementById('cohostPanel').style.display = 'none';
+      cohostMicOn = false;
+    });
+
+    function toggleCohostMic() {
+      cohostMicOn = !cohostMicOn;
+      socket.emit('cohost-mic-toggle', cohostMicOn);
+      updateCohostBtn();
+    }
+
+    function updateCohostBtn() {
+      const btn = document.getElementById('cohostMicBtn');
+      const status = document.getElementById('cohostMicStatus');
+      if (cohostMicOn) {
+        btn.textContent = 'MUTE MIC';
+        btn.style.background = 'var(--red)';
+        btn.style.color = '#fff';
+        status.textContent = 'Mic is LIVE';
+        status.style.color = 'var(--green)';
+      } else {
+        btn.textContent = 'ALLOW MIC';
+        btn.style.background = '#333';
+        btn.style.color = 'var(--text-dim)';
+        status.textContent = 'Mic off';
+        status.style.color = '#666';
+      }
+    }
 
     function showSidebarTab(tab) {
       document.getElementById('sidebarChat').style.display = tab === 'chat' ? 'flex' : 'none';
