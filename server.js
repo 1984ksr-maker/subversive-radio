@@ -406,6 +406,51 @@ app.get('/api/stream-proxy', (req, res) => {
   });
 });
 
+// HTTP live stream — endless WAV of the broadcast, playable in a plain <audio> tag
+// (WordPress.com strips scripts/iframes but allows <audio src>, so this is the
+// only way to embed the station directly on wearebornfree.de)
+const streamClients = new Set();
+
+function wavStreamHeader(sampleRate) {
+  const buf = Buffer.alloc(44);
+  buf.write('RIFF', 0);
+  buf.writeUInt32LE(0xFFFFFFFF, 4);   // unknown length — endless stream
+  buf.write('WAVE', 8);
+  buf.write('fmt ', 12);
+  buf.writeUInt32LE(16, 16);
+  buf.writeUInt16LE(1, 20);           // PCM
+  buf.writeUInt16LE(1, 22);           // mono
+  buf.writeUInt32LE(sampleRate, 24);
+  buf.writeUInt32LE(sampleRate * 2, 28);
+  buf.writeUInt16LE(2, 32);
+  buf.writeUInt16LE(16, 34);
+  buf.write('data', 36);
+  buf.writeUInt32LE(0xFFFFFFFF, 40);  // unknown length
+  return buf;
+}
+
+app.get('/stream', (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'audio/wav',
+    'Cache-Control': 'no-cache, no-store',
+    'Access-Control-Allow-Origin': '*',
+    'Connection': 'keep-alive',
+  });
+  res.write(wavStreamHeader(stationInfo.sampleRate || 44100));
+  streamClients.add(res);
+  req.on('close', () => streamClients.delete(res));
+});
+
+function writeToStreamClients(data) {
+  if (!streamClients.size) return;
+  const chunk = Buffer.isBuffer(data) ? data : Buffer.from(data);
+  for (const res of streamClients) {
+    // Drop clients that can't keep up instead of buffering audio in memory
+    if (res.writableLength > 2 * 1024 * 1024) { res.destroy(); streamClients.delete(res); continue; }
+    res.write(chunk);
+  }
+}
+
 // Embeddable mini player
 app.get('/embed', (req, res) => {
   res.setHeader('X-Frame-Options', 'ALLOWALL');
@@ -561,6 +606,7 @@ io.on('connection', (socket) => {
       io.to(cohostSocketId).emit('cohost-kicked');
       cohostSocketId = null;
       cohostMicAllowed = false;
+      cohostBuffer = null;
       io.to(broadcasterSocketId).emit('cohost-left');
     }
   });
@@ -568,6 +614,7 @@ io.on('connection', (socket) => {
   socket.on('cohost-mic-toggle', (allowed) => {
     if (!isBroadcaster) return;
     cohostMicAllowed = !!allowed;
+    if (!cohostMicAllowed) cohostBuffer = null;
     if (cohostSocketId) {
       io.to(cohostSocketId).emit('cohost-mic-state', cohostMicAllowed);
     }
@@ -604,9 +651,12 @@ io.on('connection', (socket) => {
         out[i] = Math.max(-32768, Math.min(32767, mixed));
       }
       cohostBuffer = null;
-      io.to('listeners').volatile.emit('audio-stream', Buffer.from(out.buffer));
+      const mixedBuf = Buffer.from(out.buffer);
+      io.to('listeners').volatile.emit('audio-stream', mixedBuf);
+      writeToStreamClients(mixedBuf);
     } else {
       io.to('listeners').volatile.emit('audio-stream', data);
+      writeToStreamClients(data);
     }
   });
 
@@ -713,6 +763,7 @@ io.on('connection', (socket) => {
     if (isCoHost && cohostSocketId === socket.id) {
       cohostSocketId = null;
       cohostMicAllowed = false;
+      cohostBuffer = null;
       if (broadcasterSocketId) {
         io.to(broadcasterSocketId).emit('cohost-left');
       }
