@@ -406,44 +406,50 @@ app.get('/api/stream-proxy', (req, res) => {
   });
 });
 
-// HTTP live stream — endless WAV of the broadcast, playable in a plain <audio> tag
-// (WordPress.com strips scripts/iframes but allows <audio src>, so this is the
-// only way to embed the station directly on wearebornfree.de)
+// HTTP live stream — endless MP3 of the broadcast, playable in a plain <audio> tag
+// everywhere including Safari/iOS (which can't play endless WAV). WordPress.com
+// strips scripts/iframes but allows <audio src>, so this is the only way to
+// embed the station directly on wearebornfree.de.
 const streamClients = new Set();
+let Mp3Encoder = null;
+import('@breezystack/lamejs')
+  .then(m => { Mp3Encoder = m.Mp3Encoder; })
+  .catch(e => console.error('MP3 encoder failed to load — /stream disabled:', e.message));
 
-function wavStreamHeader(sampleRate) {
-  const buf = Buffer.alloc(44);
-  buf.write('RIFF', 0);
-  buf.writeUInt32LE(0xFFFFFFFF, 4);   // unknown length — endless stream
-  buf.write('WAVE', 8);
-  buf.write('fmt ', 12);
-  buf.writeUInt32LE(16, 16);
-  buf.writeUInt16LE(1, 20);           // PCM
-  buf.writeUInt16LE(1, 22);           // mono
-  buf.writeUInt32LE(sampleRate, 24);
-  buf.writeUInt32LE(sampleRate * 2, 28);
-  buf.writeUInt16LE(2, 32);
-  buf.writeUInt16LE(16, 34);
-  buf.write('data', 36);
-  buf.writeUInt32LE(0xFFFFFFFF, 40);  // unknown length
-  return buf;
+let mp3Encoder = null;
+let mp3EncoderRate = 0;
+
+function getMp3Encoder() {
+  if (!Mp3Encoder) return null;
+  const rate = stationInfo.sampleRate || 44100;
+  if (!mp3Encoder || mp3EncoderRate !== rate) {
+    mp3Encoder = new Mp3Encoder(1, rate, 128); // mono, 128 kbps
+    mp3EncoderRate = rate;
+  }
+  return mp3Encoder;
 }
 
 app.get('/stream', (req, res) => {
   res.writeHead(200, {
-    'Content-Type': 'audio/wav',
+    'Content-Type': 'audio/mpeg',
     'Cache-Control': 'no-cache, no-store',
     'Access-Control-Allow-Origin': '*',
     'Connection': 'keep-alive',
   });
-  res.write(wavStreamHeader(stationInfo.sampleRate || 44100));
   streamClients.add(res);
   req.on('close', () => streamClients.delete(res));
 });
 
 function writeToStreamClients(data) {
   if (!streamClients.size) return;
-  const chunk = Buffer.isBuffer(data) ? data : Buffer.from(data);
+  const enc = getMp3Encoder();
+  if (!enc) return;
+  let buf = Buffer.isBuffer(data) ? data : Buffer.from(data);
+  if (buf.byteOffset % 2 !== 0) buf = Buffer.from(buf); // Int16Array needs 2-byte alignment
+  const pcm = new Int16Array(buf.buffer, buf.byteOffset, buf.byteLength >> 1);
+  const mp3 = enc.encodeBuffer(pcm);
+  if (!mp3 || !mp3.length) return;
+  const chunk = Buffer.from(mp3.buffer, mp3.byteOffset, mp3.byteLength);
   for (const res of streamClients) {
     // Drop clients that can't keep up instead of buffering audio in memory
     if (res.writableLength > 2 * 1024 * 1024) { res.destroy(); streamClients.delete(res); continue; }
