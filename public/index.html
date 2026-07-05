@@ -765,14 +765,11 @@
         const duration = buffer.duration;
         const now = audioContext.currentTime;
 
-        // If we've fallen behind, reset schedule
         if (nextPlayTime < now) {
           nextPlayTime = now + BUFFER_AHEAD;
         }
 
-        // If buffer is too far ahead (causes echo), flush and reset
         if (nextPlayTime - now > MAX_BUFFER_AHEAD) {
-          // Stop all queued sources to prevent echo
           activeSources.forEach(s => { try { s.stop(); } catch(e) {} });
           activeSources = [];
           nextPlayTime = now + BUFFER_AHEAD;
@@ -783,13 +780,11 @@
         source.connect(gainNode);
         source.start(nextPlayTime);
 
-        // Track active sources, clean up finished ones
         activeSources.push(source);
         source.onended = () => {
           activeSources = activeSources.filter(s => s !== source);
         };
 
-        // Schedule next chunk gapless
         nextPlayTime += duration;
       } catch (e) {}
     }

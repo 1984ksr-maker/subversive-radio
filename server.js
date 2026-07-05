@@ -517,6 +517,7 @@ let broadcasterSocketId = null;
 let cohostSocketId = null;
 let cohostMicAllowed = false;
 let cohostAccessOpen = false;
+let cohostBuffer = null;
 const mutedUsers = new Set();
 
 
@@ -582,11 +583,31 @@ io.on('connection', (socket) => {
     socket.emit('station-info', stationInfo);
   });
 
-  // AUDIO STREAM — forward directly, no server-side mixing
+  // AUDIO STREAM — co-host buffers, mixes into broadcaster's next chunk
   socket.on('audio-stream', (data) => {
     if (!isBroadcaster && !isCoHost) return;
     if (isCoHost && !cohostMicAllowed) return;
-    io.to('listeners').volatile.emit('audio-stream', data);
+
+    if (isCoHost) {
+      cohostBuffer = data;
+      return;
+    }
+
+    // Broadcaster chunk — mix in co-host if buffered
+    if (cohostBuffer && cohostMicAllowed) {
+      const a = Buffer.isBuffer(data) ? new Int16Array(data.buffer, data.byteOffset, data.byteLength / 2) : new Int16Array(data);
+      const b = Buffer.isBuffer(cohostBuffer) ? new Int16Array(cohostBuffer.buffer, cohostBuffer.byteOffset, cohostBuffer.byteLength / 2) : new Int16Array(cohostBuffer);
+      const len = Math.max(a.length, b.length);
+      const out = new Int16Array(len);
+      for (let i = 0; i < len; i++) {
+        const mixed = (i < a.length ? a[i] : 0) + (i < b.length ? b[i] : 0);
+        out[i] = Math.max(-32768, Math.min(32767, mixed));
+      }
+      cohostBuffer = null;
+      io.to('listeners').volatile.emit('audio-stream', Buffer.from(out.buffer));
+    } else {
+      io.to('listeners').volatile.emit('audio-stream', data);
+    }
   });
 
   // STATION CONTROLS
