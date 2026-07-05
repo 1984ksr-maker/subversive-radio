@@ -1391,6 +1391,15 @@
             </div>
             <div class="link-hint">Share this link — anyone can listen in their browser</div>
           </div>
+
+          <div class="panel-section" id="cohostLinkSection" style="display:none">
+            <h2>Co-Host Link</h2>
+            <div class="link-row">
+              <input type="text" id="cohostLink" readonly>
+              <button class="btn btn-green" onclick="navigator.clipboard.writeText(document.getElementById('cohostLink').value).then(()=>{this.textContent='✓';setTimeout(()=>{this.textContent='COPY'},1500)})">COPY</button>
+            </div>
+            <div class="link-hint">Share with your co-host — they get a mic-only page</div>
+          </div>
         </div>
 
       </div>
@@ -3456,16 +3465,21 @@
       cohostAccessOpen = !cohostAccessOpen;
       socket.emit('cohost-access-toggle', cohostAccessOpen);
       const btn = document.getElementById('cohostAccessBtn');
+      const linkSection = document.getElementById('cohostLinkSection');
+      const linkInput = document.getElementById('cohostLink');
       if (cohostAccessOpen) {
         btn.textContent = 'CLOSE CO-HOST';
         btn.style.borderColor = 'var(--green)';
         btn.style.color = 'var(--green)';
         btn.style.borderStyle = 'solid';
+        linkInput.value = window.location.origin + '/cohost';
+        linkSection.style.display = 'block';
       } else {
         btn.textContent = 'OPEN CO-HOST';
         btn.style.borderColor = '#333';
         btn.style.color = '#555';
         btn.style.borderStyle = 'dashed';
+        linkSection.style.display = 'none';
         document.getElementById('cohostMicBtn').style.display = 'none';
         cohostMicOn = false;
       }
