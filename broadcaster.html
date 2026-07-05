@@ -1513,6 +1513,17 @@
       socket.emit('join-broadcaster');
       document.getElementById('statusDot').classList.add('connected');
       document.getElementById('statusText').textContent = 'Connected to server';
+      // If we were live before a disconnect (e.g. server restart), re-announce
+      // the broadcast — otherwise the server stays marked offline and drops audio.
+      if (isLive) {
+        socket.emit('go-live', {
+          name: document.getElementById('stationNameInput').value,
+          tagline: document.getElementById('stationTagline').value,
+          sampleRate: currentSampleRate
+        });
+        document.getElementById('statusDot').classList.add('live');
+        document.getElementById('statusText').textContent = 'Reconnected — back on air';
+      }
       loadAllInputDevices();
     });
 
