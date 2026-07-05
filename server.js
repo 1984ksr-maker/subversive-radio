@@ -305,6 +305,9 @@ app.get('/broadcaster', (req, res) => {
 });
 
 app.get('/cohost', (req, res) => {
+  if (!cohostAccessOpen) {
+    return res.status(403).send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Co-Host — Subversive Radio</title><style>*{margin:0;padding:0;box-sizing:border-box}body{background:#0a0a0a;color:#e0e0e0;font-family:-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;text-align:center;padding:20px}.msg{max-width:320px}.msg h1{font-size:14px;letter-spacing:3px;color:#ff3333;margin-bottom:16px}.msg p{font-size:13px;color:#666;line-height:1.6}</style></head><body><div class="msg"><h1>CO-HOST ACCESS CLOSED</h1><p>The host hasn't opened co-host access yet. Ask them to enable it from the broadcaster panel.</p></div></body></html>`);
+  }
   res.sendFile(path.join(__dirname, 'cohost.html'));
 });
 
@@ -513,6 +516,7 @@ function getListenerCount() {
 let broadcasterSocketId = null;
 let cohostSocketId = null;
 let cohostMicAllowed = false;
+let cohostAccessOpen = false;
 const mutedUsers = new Set();
 
 
@@ -545,6 +549,18 @@ io.on('connection', (socket) => {
     // Notify broadcaster directly (not via room, to avoid co-host receiving it)
     if (broadcasterSocketId) {
       io.to(broadcasterSocketId).emit('cohost-joined', { id: socket.id, name });
+    }
+  });
+
+  socket.on('cohost-access-toggle', (open) => {
+    if (!isBroadcaster) return;
+    cohostAccessOpen = !!open;
+    console.log('🎙️  Co-host access:', cohostAccessOpen ? 'OPEN' : 'CLOSED');
+    if (!cohostAccessOpen && cohostSocketId) {
+      io.to(cohostSocketId).emit('cohost-kicked');
+      cohostSocketId = null;
+      cohostMicAllowed = false;
+      io.to(broadcasterSocketId).emit('cohost-left');
     }
   });
 

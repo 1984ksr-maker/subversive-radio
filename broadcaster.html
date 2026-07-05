@@ -963,7 +963,8 @@
               <!-- MIC MUTE — always visible -->
               <button class="mic-mute-btn" id="micMuteBtn" onclick="toggleMicMute()">🎙️ MIC ON</button>
 
-              <!-- CO-HOST MIC — appears when co-host connects -->
+              <!-- CO-HOST ACCESS -->
+              <button id="cohostAccessBtn" onclick="toggleCohostAccess()" style="width:100%;padding:8px;border-radius:6px;border:1px dashed #333;background:transparent;color:#555;font-family:inherit;font-size:9px;letter-spacing:1px;cursor:pointer;transition:all 0.2s">OPEN CO-HOST</button>
               <button id="cohostMicBtn" onclick="toggleCohostMic()" style="display:none;width:100%;padding:10px;border-radius:6px;border:2px solid #333;background:var(--surface2);color:var(--text-dim);font-family:inherit;font-size:11px;letter-spacing:1px;cursor:pointer;transition:all 0.2s">🎙️2 CO-HOST MIC</button>
 
               <!-- SINGLE DEVICE SELECTOR — shows ALL audio inputs -->
@@ -3448,7 +3449,27 @@
     });
 
     // ========== CO-HOST CONTROL ==========
+    let cohostAccessOpen = false;
     let cohostMicOn = false;
+
+    function toggleCohostAccess() {
+      cohostAccessOpen = !cohostAccessOpen;
+      socket.emit('cohost-access-toggle', cohostAccessOpen);
+      const btn = document.getElementById('cohostAccessBtn');
+      if (cohostAccessOpen) {
+        btn.textContent = 'CLOSE CO-HOST';
+        btn.style.borderColor = 'var(--green)';
+        btn.style.color = 'var(--green)';
+        btn.style.borderStyle = 'solid';
+      } else {
+        btn.textContent = 'OPEN CO-HOST';
+        btn.style.borderColor = '#333';
+        btn.style.color = '#555';
+        btn.style.borderStyle = 'dashed';
+        document.getElementById('cohostMicBtn').style.display = 'none';
+        cohostMicOn = false;
+      }
+    }
 
     socket.on('cohost-joined', (info) => {
       const btn = document.getElementById('cohostMicBtn');

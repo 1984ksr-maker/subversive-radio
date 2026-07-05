@@ -241,6 +241,17 @@
       updateStatus();
     });
 
+    socket.on('cohost-kicked', () => {
+      micAllowed = false;
+      if (micActive) stopMic();
+      connected = false;
+      socket.disconnect();
+      document.getElementById('statusText').innerHTML = '<span class="connection-dot"></span>Host closed co-host access';
+      document.getElementById('statusText').className = 'status-text muted';
+      document.getElementById('micBtn').className = 'mic-btn disabled';
+      document.getElementById('micLabel').textContent = 'ACCESS CLOSED';
+    });
+
     socket.on('cohost-mic-state', (allowed) => {
       micAllowed = allowed;
       if (!allowed && micActive) stopMic();
