@@ -1508,6 +1508,14 @@
     // Convert linear gain to dB
     function gainToDb(gain) { return gain > 0 ? 20 * Math.log10(gain) : -Infinity; }
 
+    // Wake lock and keep-alive are defined later in the KEEP BROADCASTING section
+
+    // Keep-alive ping — stops Render's free tier from idling the server
+    // during long shows with few HTTP requests.
+    setInterval(() => {
+      if (isLive) fetch('/health').catch(() => {});
+    }, 4 * 60 * 1000);
+
     // Socket events
     socket.on('connect', () => {
       socket.emit('join-broadcaster');
@@ -1665,6 +1673,7 @@
         if (isLive) {
           isLive = false;
           socket.emit('go-offline');
+          stopBroadcastKeepAlive();
           const btn = document.getElementById('goLiveBtn');
           const badge = document.getElementById('onAirBadge');
           const dot = document.getElementById('statusDot');
@@ -1703,6 +1712,18 @@
         highPassFilter = null;
         musicSourceNode = null;
         musicGainNode = null;
+        if (musicAudioElement) {
+          musicAudioElement.pause();
+          musicAudioElement.src = '';
+          musicAudioElement = null;
+        }
+        if (radioAudioElement) {
+          radioAudioElement.pause();
+          radioAudioElement.src = '';
+          radioAudioElement = null;
+          radioSourceNode = null;
+          radioGainNode = null;
+        }
 
         document.getElementById('statusText').textContent =
           mode === 'mic' ? 'Source: Microphone — click GO LIVE' :
@@ -2260,6 +2281,8 @@
                           sourceMode === 'external' ? 'EXTERNAL: ' + deviceName :
                           'MIC + EXTERNAL';
         document.getElementById('statusText').textContent = 'LIVE — ' + modeLabel;
+        acquireWakeLock();
+        startBroadcastKeepAlive();
       } else {
         btn.textContent = 'GO LIVE';
         btn.classList.remove('live');
@@ -2267,6 +2290,7 @@
         badge.classList.remove('live');
         dot.classList.remove('live');
         socket.emit('go-offline');
+        stopBroadcastKeepAlive();
       }
     }
 
@@ -3592,22 +3616,10 @@
         if (audioContext && audioContext.state === 'suspended') audioContext.resume();
         startBroadcastKeepAlive();
         acquireWakeLock();
-      } else if (!document.hidden) {
+      } else if (!document.hidden && isLive) {
         acquireWakeLock();
       }
     });
-
-    const _origGoLive = typeof goLive === 'function' ? goLive : null;
-    const origGoLiveBtn = document.getElementById('goLiveBtn');
-    if (origGoLiveBtn) {
-      const origOnclick = origGoLiveBtn.onclick;
-      origGoLiveBtn.addEventListener('click', () => {
-        setTimeout(() => {
-          if (isLive) { acquireWakeLock(); startBroadcastKeepAlive(); }
-          else { stopBroadcastKeepAlive(); }
-        }, 500);
-      });
-    }
   </script>
 </body>
 </html>
