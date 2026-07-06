@@ -1,9 +1,10 @@
-const { app, BrowserWindow, shell, session } = require('electron');
+const { app, BrowserWindow, shell, session, powerSaveBlocker } = require('electron');
 const path = require('path');
 const { fork } = require('child_process');
 
 let mainWindow;
 let serverProcess;
+let sleepBlockerId = null;
 const PORT = 3333;
 
 function startServer() {
@@ -77,6 +78,9 @@ function createWindow() {
 app.whenReady().then(async () => {
   await startServer();
   createWindow();
+  // Keep broadcasting through display sleep / app nap — audio capture dies
+  // if macOS suspends the app, so block suspension for the app's lifetime.
+  sleepBlockerId = powerSaveBlocker.start('prevent-app-suspension');
 });
 
 app.on('window-all-closed', () => {
@@ -89,6 +93,10 @@ app.on('activate', () => {
 });
 
 app.on('before-quit', () => {
+  if (sleepBlockerId !== null && powerSaveBlocker.isStarted(sleepBlockerId)) {
+    powerSaveBlocker.stop(sleepBlockerId);
+    sleepBlockerId = null;
+  }
   if (serverProcess) {
     serverProcess.kill();
     serverProcess = null;

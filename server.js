@@ -442,19 +442,39 @@ app.get('/stream', (req, res) => {
 
 function writeToStreamClients(data) {
   if (!streamClients.size) return;
-  const enc = getMp3Encoder();
-  if (!enc) return;
-  let buf = Buffer.isBuffer(data) ? data : Buffer.from(data);
-  if (buf.byteOffset % 2 !== 0) buf = Buffer.from(buf); // Int16Array needs 2-byte alignment
-  const pcm = new Int16Array(buf.buffer, buf.byteOffset, buf.byteLength >> 1);
-  const mp3 = enc.encodeBuffer(pcm);
-  if (!mp3 || !mp3.length) return;
-  const chunk = Buffer.from(mp3.buffer, mp3.byteOffset, mp3.byteLength);
+  let chunk;
+  try {
+    const enc = getMp3Encoder();
+    if (!enc) return;
+    let buf = Buffer.isBuffer(data) ? data : Buffer.from(data);
+    if (buf.byteOffset % 2 !== 0) buf = Buffer.from(buf); // Int16Array needs 2-byte alignment
+    const pcm = new Int16Array(buf.buffer, buf.byteOffset, buf.byteLength >> 1);
+    const mp3 = enc.encodeBuffer(pcm);
+    if (!mp3 || !mp3.length) return;
+    chunk = Buffer.from(mp3.buffer, mp3.byteOffset, mp3.byteLength);
+  } catch (e) {
+    // A malformed chunk must never take down the station — reset the encoder
+    console.error('MP3 encode error (chunk dropped):', e.message);
+    mp3Encoder = null;
+    return;
+  }
   for (const res of streamClients) {
     // Drop clients that can't keep up instead of buffering audio in memory
     if (res.writableLength > 2 * 1024 * 1024) { res.destroy(); streamClients.delete(res); continue; }
-    res.write(chunk);
+    try { res.write(chunk); } catch (e) { streamClients.delete(res); }
   }
+}
+
+function flushStreamClients() {
+  if (!mp3Encoder) return;
+  try {
+    const tail = mp3Encoder.flush();
+    if (tail && tail.length) {
+      const chunk = Buffer.from(tail.buffer, tail.byteOffset, tail.byteLength);
+      for (const res of streamClients) { try { res.write(chunk); } catch (e) {} }
+    }
+  } catch (e) {}
+  mp3Encoder = null; // fresh encoder for the next show
 }
 
 // Embeddable mini player
@@ -508,7 +528,7 @@ body{font-family:'SF Mono','Courier New',monospace;background:#0a0a0a;color:#e0e
 <script src="${host}/socket.io/socket.io.js"></script>
 <script>
 const SERVER='${host}';
-let socket,audioContext,gainNode,isListening=false,nextPlayTime=0,activeSources=[],isLive=false;
+let socket,player=null,isListening=false,isLive=false,vol=1;
 
 fetch(SERVER+'/api/station').then(r=>r.json()).then(d=>{
   document.getElementById('stName').textContent=d.name||'SUBVERSIVE RADIO';
@@ -520,9 +540,9 @@ fetch(SERVER+'/api/station').then(r=>r.json()).then(d=>{
 socket=io(SERVER,{transports:['websocket','polling']});
 socket.on('connect',()=>{socket.emit('join-listener');});
 socket.on('station-live',d=>{isLive=true;goLive();});
-socket.on('station-off',()=>{isLive=false;goOff();if(isListening)toggle();});
+socket.on('station-offline',()=>{isLive=false;goOff();if(isListening)toggle();});
+socket.on('station-info',d=>{if(d&&d.isLive&&!isLive){isLive=true;goLive();}});
 socket.on('listener-count',c=>{document.getElementById('lCount').textContent=c>0?c+' listening':'';});
-socket.on('audio-chunk',(buf)=>{if(!isListening||!audioContext)return;try{audioContext.decodeAudioData(buf.slice(0),(decoded)=>{const src=audioContext.createBufferSource();src.buffer=decoded;src.connect(gainNode);const now=audioContext.currentTime;if(nextPlayTime<now)nextPlayTime=now+0.05;src.start(nextPlayTime);activeSources.push(src);src.onended=()=>{activeSources=activeSources.filter(s=>s!==src);};nextPlayTime+=decoded.duration;});} catch(e){}});
 
 function goLive(){
   document.getElementById('badge').textContent='LIVE';
@@ -539,20 +559,20 @@ function toggle(){
   const btn=document.getElementById('playBtn');
   if(!isListening){
     if(!isLive)return;
-    audioContext=new(window.AudioContext||window.webkitAudioContext)();
-    gainNode=audioContext.createGain();gainNode.connect(audioContext.destination);
-    isListening=true;nextPlayTime=0;
+    player=new Audio(SERVER+'/stream');
+    player.volume=vol;
+    player.play().catch(()=>{});
+    isListening=true;
     btn.textContent='LISTENING';btn.classList.add('listening');
     document.getElementById('volRow').style.display='flex';
   }else{
-    isListening=false;nextPlayTime=0;
-    activeSources.forEach(s=>{try{s.stop();}catch(e){}});activeSources=[];
-    if(audioContext){audioContext.close();audioContext=null;}
+    if(player){player.pause();player.src='';player=null;}
+    isListening=false;
     btn.textContent='TUNE IN';btn.classList.remove('listening');
     document.getElementById('volRow').style.display='none';
   }
 }
-function setVol(v){if(gainNode)gainNode.gain.value=parseFloat(v);}
+function setVol(v){vol=parseFloat(v);if(player)player.volume=vol;}
 </script>
 </body>
 </html>`;
@@ -682,6 +702,7 @@ io.on('connection', (socket) => {
     stationInfo.isLive = false;
     stationInfo.currentTransmission = null;
     io.to('listeners').emit('station-offline');
+    flushStreamClients();
     console.log('⭕ Station offline');
   });
 
