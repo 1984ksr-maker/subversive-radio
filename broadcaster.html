@@ -1897,8 +1897,8 @@
           if (!isLive) return;
           const inputData = e.inputBuffer.getChannelData(0);
 
-          // Noise gate — only when no music/capture is playing (gate would chop music)
-          const musicPlaying = musicAudioElement && !musicAudioElement.paused;
+          // Noise gate — only when no music/radio/capture is playing (gate would chop music)
+          const musicPlaying = (musicAudioElement && !musicAudioElement.paused) || (radioAudioElement && !radioAudioElement.paused);
           const captureActive = !!systemAudioSource;
           if (gateEnabled && !musicPlaying && !captureActive) {
             let rms = 0;
@@ -3615,9 +3615,11 @@
       if (document.hidden && isLive) {
         if (audioContext && audioContext.state === 'suspended') audioContext.resume();
         startBroadcastKeepAlive();
-        acquireWakeLock();
-      } else if (!document.hidden && isLive) {
-        acquireWakeLock();
+      } else if (!document.hidden) {
+        if (isLive) {
+          acquireWakeLock();
+          if (audioContext && audioContext.state === 'suspended') audioContext.resume();
+        }
       }
     });
   </script>
