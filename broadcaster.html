@@ -963,9 +963,21 @@
               <!-- MIC MUTE — always visible -->
               <button class="mic-mute-btn" id="micMuteBtn" onclick="toggleMicMute()">🎙️ MIC ON</button>
 
-              <!-- CO-HOST ACCESS -->
-              <button id="cohostAccessBtn" onclick="toggleCohostAccess()" style="width:100%;padding:8px;border-radius:6px;border:1px dashed #333;background:transparent;color:#555;font-family:inherit;font-size:9px;letter-spacing:1px;cursor:pointer;transition:all 0.2s">OPEN CO-HOST</button>
-              <button id="cohostMicBtn" onclick="toggleCohostMic()" style="display:none;width:100%;padding:10px;border-radius:6px;border:2px solid #333;background:var(--surface2);color:var(--text-dim);font-family:inherit;font-size:11px;letter-spacing:1px;cursor:pointer;transition:all 0.2s">🎙️2 CO-HOST MIC</button>
+              <!-- CO-HOST PANEL -->
+              <div id="cohostPanel" style="width:100%;border:1px solid #333;border-radius:8px;overflow:hidden">
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--surface2)">
+                  <span style="font-size:9px;letter-spacing:2px;color:var(--text-dim)">🎙️2 CO-HOST</span>
+                  <span id="cohostStatusLabel" style="font-size:8px;letter-spacing:1px;color:#555">CLOSED</span>
+                </div>
+                <div style="padding:8px 12px;display:flex;flex-direction:column;gap:6px">
+                  <button id="cohostAccessBtn" onclick="toggleCohostAccess()" style="width:100%;padding:8px;border-radius:6px;border:1px solid #333;background:var(--surface);color:var(--text-dim);font-family:inherit;font-size:10px;letter-spacing:1px;cursor:pointer;transition:all 0.2s">OPEN ACCESS</button>
+                  <div id="cohostConnectedRow" style="display:none;display:none;align-items:center;gap:8px;padding:6px 0">
+                    <div id="cohostDot" style="width:8px;height:8px;border-radius:50%;background:var(--green);flex-shrink:0"></div>
+                    <span id="cohostConnectedName" style="font-size:11px;flex:1">—</span>
+                    <button id="cohostMicBtn" onclick="toggleCohostMic()" style="padding:6px 14px;border-radius:6px;border:1px solid #333;background:var(--surface);color:var(--text-dim);font-family:inherit;font-size:9px;letter-spacing:1px;cursor:pointer;transition:all 0.2s">ALLOW MIC</button>
+                  </div>
+                </div>
+              </div>
 
               <!-- SINGLE DEVICE SELECTOR — shows ALL audio inputs -->
               <div style="width:100%;display:flex;flex-direction:column;gap:6px">
@@ -3496,63 +3508,95 @@
     let cohostAccessOpen = false;
     let cohostMicOn = false;
 
-    function toggleCohostAccess() {
-      cohostAccessOpen = !cohostAccessOpen;
-      socket.emit('cohost-access-toggle', cohostAccessOpen);
-      const btn = document.getElementById('cohostAccessBtn');
+    function updateCohostPanel() {
+      const accessBtn = document.getElementById('cohostAccessBtn');
+      const statusLabel = document.getElementById('cohostStatusLabel');
+      const connRow = document.getElementById('cohostConnectedRow');
+      const micBtn = document.getElementById('cohostMicBtn');
       const linkSection = document.getElementById('cohostLinkSection');
       const linkInput = document.getElementById('cohostLink');
-      if (cohostAccessOpen) {
-        btn.textContent = 'CLOSE CO-HOST';
-        btn.style.borderColor = 'var(--green)';
-        btn.style.color = 'var(--green)';
-        btn.style.borderStyle = 'solid';
+      const panel = document.getElementById('cohostPanel');
+
+      if (!cohostAccessOpen) {
+        // CLOSED state
+        accessBtn.textContent = 'OPEN ACCESS';
+        accessBtn.style.borderColor = '#333';
+        accessBtn.style.color = 'var(--text-dim)';
+        accessBtn.style.background = 'var(--surface)';
+        statusLabel.textContent = 'CLOSED';
+        statusLabel.style.color = '#555';
+        connRow.style.display = 'none';
+        linkSection.style.display = 'none';
+        panel.style.borderColor = '#333';
+      } else if (!document.getElementById('cohostConnectedName').dataset.connected) {
+        // OPEN, waiting for co-host
+        accessBtn.textContent = 'CLOSE ACCESS';
+        accessBtn.style.borderColor = 'var(--amber)';
+        accessBtn.style.color = 'var(--amber)';
+        accessBtn.style.background = 'rgba(255,170,0,0.1)';
+        statusLabel.textContent = 'WAITING...';
+        statusLabel.style.color = 'var(--amber)';
+        connRow.style.display = 'none';
         linkInput.value = window.location.origin + '/cohost';
         linkSection.style.display = 'block';
+        panel.style.borderColor = 'var(--amber)';
       } else {
-        btn.textContent = 'OPEN CO-HOST';
-        btn.style.borderColor = '#333';
-        btn.style.color = '#555';
-        btn.style.borderStyle = 'dashed';
+        // Co-host connected
+        accessBtn.textContent = 'CLOSE ACCESS';
+        accessBtn.style.borderColor = 'var(--red)';
+        accessBtn.style.color = 'var(--red)';
+        accessBtn.style.background = 'rgba(255,45,45,0.1)';
+        connRow.style.display = 'flex';
         linkSection.style.display = 'none';
-        document.getElementById('cohostMicBtn').style.display = 'none';
-        cohostMicOn = false;
+        panel.style.borderColor = cohostMicOn ? 'var(--red)' : 'var(--green)';
+
+        if (cohostMicOn) {
+          statusLabel.textContent = 'MIC LIVE';
+          statusLabel.style.color = 'var(--red)';
+          micBtn.textContent = 'MUTE';
+          micBtn.style.background = 'var(--red)';
+          micBtn.style.borderColor = 'var(--red)';
+          micBtn.style.color = '#fff';
+        } else {
+          statusLabel.textContent = 'CONNECTED';
+          statusLabel.style.color = 'var(--green)';
+          micBtn.textContent = 'ALLOW MIC';
+          micBtn.style.background = 'var(--surface)';
+          micBtn.style.borderColor = 'var(--green)';
+          micBtn.style.color = 'var(--green)';
+        }
       }
     }
 
+    function toggleCohostAccess() {
+      cohostAccessOpen = !cohostAccessOpen;
+      socket.emit('cohost-access-toggle', cohostAccessOpen);
+      if (!cohostAccessOpen) {
+        document.getElementById('cohostConnectedName').dataset.connected = '';
+        cohostMicOn = false;
+      }
+      updateCohostPanel();
+    }
+
     socket.on('cohost-joined', (info) => {
-      const btn = document.getElementById('cohostMicBtn');
-      btn.style.display = 'block';
-      btn.dataset.name = info.name || 'Co-Host';
+      const nameEl = document.getElementById('cohostConnectedName');
+      nameEl.textContent = info.name || 'Co-Host';
+      nameEl.dataset.connected = '1';
       cohostMicOn = false;
-      updateCohostBtn();
+      updateCohostPanel();
     });
 
     socket.on('cohost-left', () => {
-      const btn = document.getElementById('cohostMicBtn');
-      btn.style.display = 'none';
+      document.getElementById('cohostConnectedName').dataset.connected = '';
+      document.getElementById('cohostConnectedName').textContent = '—';
       cohostMicOn = false;
+      updateCohostPanel();
     });
 
     function toggleCohostMic() {
       cohostMicOn = !cohostMicOn;
       socket.emit('cohost-mic-toggle', cohostMicOn);
-      updateCohostBtn();
-    }
-
-    function updateCohostBtn() {
-      const btn = document.getElementById('cohostMicBtn');
-      if (cohostMicOn) {
-        btn.textContent = '🎙️2 CO-HOST LIVE';
-        btn.style.background = 'rgba(255,45,45,0.2)';
-        btn.style.borderColor = 'var(--red)';
-        btn.style.color = 'var(--red)';
-      } else {
-        btn.textContent = '🎙️2 CO-HOST MIC';
-        btn.style.background = 'var(--surface2)';
-        btn.style.borderColor = '#333';
-        btn.style.color = 'var(--text-dim)';
-      }
+      updateCohostPanel();
     }
 
     function showSidebarTab(tab) {
