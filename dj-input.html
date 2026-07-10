@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>DJ Input — Subversive Radio</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0a0a0a;
+      color: #e0e0e0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      min-height: 100dvh;
+      padding: 20px;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    .logo { font-size: 11px; letter-spacing: 4px; color: #555; text-transform: uppercase; margin-bottom: 8px; }
+    .title { font-size: 18px; font-weight: 700; letter-spacing: 2px; color: #00ccff; margin-bottom: 30px; }
+
+    .status-box {
+      background: #111;
+      border: 1px solid #222;
+      border-radius: 12px;
+      padding: 16px 24px;
+      text-align: center;
+      margin-bottom: 24px;
+      width: 100%;
+      max-width: 320px;
+    }
+
+    .status-label { font-size: 9px; letter-spacing: 2px; color: #555; margin-bottom: 6px; }
+    .status-text { font-size: 14px; font-weight: 600; letter-spacing: 1px; }
+    .status-text.waiting { color: #ffaa00; }
+    .status-text.live { color: #00ff88; }
+    .status-text.muted { color: #ff3333; }
+    .status-text.offline { color: #555; }
+
+    .source-select {
+      width: 100%;
+      max-width: 320px;
+      margin-bottom: 20px;
+    }
+
+    .source-select label {
+      font-size: 9px; letter-spacing: 2px; color: #555; display: block; margin-bottom: 6px;
+    }
+
+    .source-select select {
+      width: 100%;
+      background: #111;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: #e0e0e0;
+      font-family: inherit;
+      font-size: 13px;
+      outline: none;
+      -webkit-appearance: none;
+    }
+
+    .source-select select:focus { border-color: #00ccff; }
+
+    .stream-btn {
+      width: 140px;
+      height: 140px;
+      border-radius: 50%;
+      border: 3px solid #333;
+      background: #1a1a1a;
+      color: #555;
+      font-size: 40px;
+      cursor: pointer;
+      transition: all 0.3s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .stream-btn.ready { border-color: #00ccff; color: #00ccff; background: #0a1520; }
+
+    .stream-btn.live {
+      border-color: #00ff88;
+      color: #00ff88;
+      background: #0a1a10;
+      box-shadow: 0 0 40px rgba(0,255,136,0.3);
+      animation: pulse-live 2s ease-in-out infinite;
+    }
+
+    .stream-btn.disabled { opacity: 0.3; cursor: not-allowed; }
+
+    @keyframes pulse-live {
+      0%, 100% { box-shadow: 0 0 20px rgba(0,255,136,0.2); }
+      50% { box-shadow: 0 0 50px rgba(0,255,136,0.4); }
+    }
+
+    .btn-label {
+      font-size: 11px; letter-spacing: 2px; color: #555; margin-top: 16px; text-transform: uppercase;
+    }
+    .btn-label.live { color: #00ff88; font-weight: 700; }
+
+    .level-bar-container {
+      width: 100%;
+      max-width: 320px;
+      height: 8px;
+      background: #111;
+      border-radius: 4px;
+      margin-top: 24px;
+      overflow: hidden;
+      border: 1px solid #222;
+    }
+
+    .level-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #00ccff 0%, #00ff88 60%, #ffaa00 80%, #ff3333 95%);
+      border-radius: 4px;
+      transition: width 0.05s linear;
+    }
+
+    .name-input-row {
+      margin-top: 24px;
+      width: 100%;
+      max-width: 320px;
+    }
+
+    .name-input-row label { font-size: 9px; letter-spacing: 2px; color: #555; display: block; margin-bottom: 6px; }
+
+    .name-input-row input {
+      width: 100%;
+      background: #111;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: #e0e0e0;
+      font-family: inherit;
+      font-size: 14px;
+      text-align: center;
+      outline: none;
+    }
+
+    .name-input-row input:focus { border-color: #00ccff; }
+
+    .info {
+      margin-top: 24px;
+      font-size: 10px;
+      color: #444;
+      text-align: center;
+      line-height: 1.6;
+      max-width: 280px;
+    }
+
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #ff3333; display: inline-block; margin-right: 6px; }
+    .dot.connected { background: #00ff88; }
+
+    .refresh-btn {
+      background: none;
+      border: 1px solid #333;
+      border-radius: 6px;
+      color: #888;
+      font-size: 16px;
+      padding: 8px 12px;
+      cursor: pointer;
+      margin-left: 8px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="logo">Subversive Radio</div>
+  <div class="title">DJ INPUT</div>
+
+  <div class="status-box">
+    <div class="status-label">STATUS</div>
+    <div class="status-text offline" id="statusText">
+      <span class="dot" id="connDot"></span>
+      Connecting...
+    </div>
+  </div>
+
+  <div class="source-select">
+    <label>AUDIO SOURCE</label>
+    <div style="display:flex;gap:6px">
+      <select id="audioSource">
+        <option value="">-- Select audio source --</option>
+      </select>
+      <button class="refresh-btn" onclick="loadDevices()">↻</button>
+    </div>
+  </div>
+
+  <button class="stream-btn disabled" id="streamBtn" onclick="toggleStream()">
+    🎧
+  </button>
+  <div class="btn-label" id="btnLabel">WAITING FOR HOST</div>
+
+  <div class="level-bar-container">
+    <div class="level-bar" id="levelBar"></div>
+  </div>
+
+  <div class="name-input-row">
+    <label>SOURCE NAME</label>
+    <input type="text" id="djName" placeholder="iPad DJ" maxlength="20" value="iPad DJ">
+  </div>
+
+  <div class="info">
+    Stream audio from this device to the broadcast.<br>
+    Select your audio source (mic, line-in, or virtual output), then tap the button when the host enables input.
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io(window.location.origin, {
+      transports: ['polling', 'websocket'],
+      upgrade: true
+    });
+    let audioContext, mediaStream, sourceNode, analyserNode, processorNode;
+    let streaming = false;
+    let allowed = false;
+    let connected = false;
+
+    async function loadDevices() {
+      try {
+        const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        tempStream.getTracks().forEach(t => t.stop());
+
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const inputs = devices.filter(d => d.kind === 'audioinput');
+        const select = document.getElementById('audioSource');
+        const currentVal = select.value;
+
+        select.innerHTML = '<option value="">-- Select audio source --</option>';
+        inputs.forEach((d, i) => {
+          const opt = document.createElement('option');
+          opt.value = d.deviceId;
+          opt.textContent = d.label || `Audio Input ${i + 1}`;
+          select.appendChild(opt);
+        });
+        if (currentVal) select.value = currentVal;
+      } catch (e) {
+        document.getElementById('audioSource').innerHTML = '<option>No audio access — tap ↻</option>';
+      }
+    }
+
+    loadDevices();
+    navigator.mediaDevices.addEventListener('devicechange', loadDevices);
+
+    socket.on('connect', () => {
+      connected = true;
+      document.getElementById('connDot').classList.add('connected');
+      const name = document.getElementById('djName').value.trim() || 'iPad DJ';
+      socket.emit('join-dj-input', { name });
+      updateStatus();
+    });
+
+    socket.on('disconnect', () => {
+      connected = false;
+      document.getElementById('connDot').classList.remove('connected');
+      allowed = false;
+      if (streaming) stopStream();
+      updateStatus();
+    });
+
+    socket.on('dj-input-kicked', () => {
+      allowed = false;
+      if (streaming) stopStream();
+      connected = false;
+      socket.disconnect();
+      document.getElementById('statusText').innerHTML = '<span class="dot"></span>Host closed DJ input';
+      document.getElementById('statusText').className = 'status-text muted';
+      document.getElementById('streamBtn').className = 'stream-btn disabled';
+      document.getElementById('btnLabel').textContent = 'ACCESS CLOSED';
+    });
+
+    socket.on('dj-input-state', (on) => {
+      allowed = on;
+      if (!on && streaming) stopStream();
+      updateStatus();
+    });
+
+    function updateStatus() {
+      const el = document.getElementById('statusText');
+      const btn = document.getElementById('streamBtn');
+      const label = document.getElementById('btnLabel');
+
+      el.className = 'status-text';
+      btn.className = 'stream-btn';
+
+      if (!connected) {
+        el.innerHTML = '<span class="dot" id="connDot"></span>Disconnected';
+        el.classList.add('offline');
+        btn.classList.add('disabled');
+        label.textContent = 'NO CONNECTION';
+        label.className = 'btn-label';
+      } else if (streaming) {
+        el.innerHTML = '<span class="dot connected" id="connDot"></span>STREAMING AUDIO';
+        el.classList.add('live');
+        btn.classList.add('live');
+        label.textContent = 'TAP TO STOP';
+        label.className = 'btn-label live';
+      } else if (allowed) {
+        el.innerHTML = '<span class="dot connected" id="connDot"></span>Host enabled input';
+        el.classList.add('live');
+        btn.classList.add('ready');
+        label.textContent = 'TAP TO STREAM';
+        label.className = 'btn-label';
+      } else {
+        el.innerHTML = '<span class="dot connected" id="connDot"></span>Waiting for host...';
+        el.classList.add('waiting');
+        btn.classList.add('disabled');
+        label.textContent = 'WAITING FOR HOST';
+        label.className = 'btn-label';
+      }
+    }
+
+    async function toggleStream() {
+      if (!allowed) return;
+      if (streaming) {
+        stopStream();
+      } else {
+        await startStream();
+      }
+      updateStatus();
+    }
+
+    async function startStream() {
+      const deviceId = document.getElementById('audioSource').value;
+      if (!deviceId) {
+        alert('Select an audio source first');
+        return;
+      }
+
+      try {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 44100 });
+        await audioContext.resume();
+
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            deviceId: { exact: deviceId },
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false
+          }
+        });
+
+        sourceNode = audioContext.createMediaStreamSource(mediaStream);
+        analyserNode = audioContext.createAnalyser();
+        analyserNode.fftSize = 256;
+
+        const bufferSize = 4096;
+        processorNode = audioContext.createScriptProcessor(bufferSize, 1, 1);
+
+        sourceNode.connect(analyserNode);
+        analyserNode.connect(processorNode);
+        const silentDest = audioContext.createMediaStreamDestination();
+        processorNode.connect(silentDest);
+
+        processorNode.onaudioprocess = (e) => {
+          if (!streaming || !allowed) return;
+          const inputData = e.inputBuffer.getChannelData(0);
+          const pcmData = new Int16Array(inputData.length);
+          for (let i = 0; i < inputData.length; i++) {
+            const s = Math.max(-1, Math.min(1, inputData[i]));
+            pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+          }
+          socket.emit('audio-stream', pcmData.buffer);
+        };
+
+        streaming = true;
+        drawLevel();
+      } catch (err) {
+        alert('Audio access denied: ' + err.message);
+      }
+    }
+
+    function stopStream() {
+      streaming = false;
+      if (mediaStream) {
+        mediaStream.getTracks().forEach(t => t.stop());
+        mediaStream = null;
+      }
+      if (audioContext) {
+        audioContext.close().catch(() => {});
+        audioContext = null;
+      }
+      sourceNode = null;
+      analyserNode = null;
+      processorNode = null;
+      document.getElementById('levelBar').style.width = '0%';
+    }
+
+    function drawLevel() {
+      if (!analyserNode || !streaming) return;
+      const data = new Uint8Array(analyserNode.frequencyBinCount);
+      analyserNode.getByteFrequencyData(data);
+      let sum = 0;
+      for (let i = 0; i < data.length; i++) sum += data[i];
+      const avg = sum / data.length;
+      const pct = Math.min(100, (avg / 128) * 100);
+      document.getElementById('levelBar').style.width = pct + '%';
+      requestAnimationFrame(drawLevel);
+    }
+
+    // Keep screen awake
+    let wakeLock = null;
+    async function requestWakeLock() {
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLock = await navigator.wakeLock.request('screen');
+        }
+      } catch (e) {}
+    }
+    requestWakeLock();
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        requestWakeLock();
+        if (audioContext && audioContext.state === 'suspended') audioContext.resume();
+      }
+    });
+  </script>
+</body>
+</html>

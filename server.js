@@ -304,6 +304,13 @@ app.get('/broadcaster', (req, res) => {
   res.sendFile(path.join(__dirname, 'broadcaster.html'));
 });
 
+app.get('/dj-input', (req, res) => {
+  if (!djInputAccessOpen) {
+    return res.status(403).send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DJ Input — Subversive Radio</title><style>*{margin:0;padding:0;box-sizing:border-box}body{background:#0a0a0a;color:#e0e0e0;font-family:-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;text-align:center;padding:20px}.msg{max-width:320px}.msg h1{font-size:14px;letter-spacing:3px;color:#ff3333;margin-bottom:16px}.msg p{font-size:13px;color:#666;line-height:1.6}</style></head><body><div class="msg"><h1>DJ INPUT CLOSED</h1><p>The host hasn't opened DJ input access yet. Ask them to enable it from the broadcaster panel.</p></div></body></html>`);
+  }
+  res.sendFile(path.join(__dirname, 'dj-input.html'));
+});
+
 app.get('/cohost', (req, res) => {
   if (!cohostAccessOpen) {
     return res.status(403).send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Co-Host — Subversive Radio</title><style>*{margin:0;padding:0;box-sizing:border-box}body{background:#0a0a0a;color:#e0e0e0;font-family:-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;text-align:center;padding:20px}.msg{max-width:320px}.msg h1{font-size:14px;letter-spacing:3px;color:#ff3333;margin-bottom:16px}.msg p{font-size:13px;color:#666;line-height:1.6}</style></head><body><div class="msg"><h1>CO-HOST ACCESS CLOSED</h1><p>The host hasn't opened co-host access yet. Ask them to enable it from the broadcaster panel.</p></div></body></html>`);
@@ -588,7 +595,9 @@ let broadcasterSocketId = null;
 let cohostSocketId = null;
 let cohostMicAllowed = false;
 let cohostAccessOpen = false;
-let cohostBuffer = null;
+let djInputSocketId = null;
+let djInputAllowed = false;
+let djInputAccessOpen = false;
 const mutedUsers = new Set();
 
 
@@ -632,7 +641,6 @@ io.on('connection', (socket) => {
       io.to(cohostSocketId).emit('cohost-kicked');
       cohostSocketId = null;
       cohostMicAllowed = false;
-      cohostBuffer = null;
       io.to(broadcasterSocketId).emit('cohost-left');
     }
   });
@@ -640,9 +648,43 @@ io.on('connection', (socket) => {
   socket.on('cohost-mic-toggle', (allowed) => {
     if (!isBroadcaster) return;
     cohostMicAllowed = !!allowed;
-    if (!cohostMicAllowed) cohostBuffer = null;
     if (cohostSocketId) {
       io.to(cohostSocketId).emit('cohost-mic-state', cohostMicAllowed);
+    }
+  });
+
+  // DJ INPUT — remote audio source (iPad DJ, another computer, etc.)
+  let isDjInput = false;
+
+  socket.on('join-dj-input', (info) => {
+    isDjInput = true;
+    djInputSocketId = socket.id;
+    djInputAllowed = false;
+    const name = (info && info.name) ? info.name.slice(0, 20) : 'DJ Input';
+    console.log('🎧  DJ input connected:', name);
+    socket.emit('dj-input-state', false);
+    if (broadcasterSocketId) {
+      io.to(broadcasterSocketId).emit('dj-input-joined', { id: socket.id, name });
+    }
+  });
+
+  socket.on('dj-input-access-toggle', (open) => {
+    if (!isBroadcaster) return;
+    djInputAccessOpen = !!open;
+    console.log('🎧  DJ input access:', djInputAccessOpen ? 'OPEN' : 'CLOSED');
+    if (!djInputAccessOpen && djInputSocketId) {
+      io.to(djInputSocketId).emit('dj-input-kicked');
+      djInputSocketId = null;
+      djInputAllowed = false;
+      io.to(broadcasterSocketId).emit('dj-input-left');
+    }
+  });
+
+  socket.on('dj-input-toggle', (allowed) => {
+    if (!isBroadcaster) return;
+    djInputAllowed = !!allowed;
+    if (djInputSocketId) {
+      io.to(djInputSocketId).emit('dj-input-state', djInputAllowed);
     }
   });
 
@@ -656,34 +698,29 @@ io.on('connection', (socket) => {
     socket.emit('station-info', stationInfo);
   });
 
-  // AUDIO STREAM — co-host buffers, mixes into broadcaster's next chunk
+  // AUDIO STREAM — co-host and DJ audio route through broadcaster's AudioContext
   socket.on('audio-stream', (data) => {
-    if (!isBroadcaster && !isCoHost) return;
+    if (!isBroadcaster && !isCoHost && !isDjInput) return;
     if (isCoHost && !cohostMicAllowed) return;
+    if (isDjInput && !djInputAllowed) return;
 
     if (isCoHost) {
-      cohostBuffer = data;
+      if (broadcasterSocketId) {
+        io.to(broadcasterSocketId).volatile.emit('cohost-audio', data);
+      }
       return;
     }
 
-    // Broadcaster chunk — mix in co-host if buffered
-    if (cohostBuffer && cohostMicAllowed) {
-      const a = Buffer.isBuffer(data) ? new Int16Array(data.buffer, data.byteOffset, data.byteLength / 2) : new Int16Array(data);
-      const b = Buffer.isBuffer(cohostBuffer) ? new Int16Array(cohostBuffer.buffer, cohostBuffer.byteOffset, cohostBuffer.byteLength / 2) : new Int16Array(cohostBuffer);
-      const len = Math.max(a.length, b.length);
-      const out = new Int16Array(len);
-      for (let i = 0; i < len; i++) {
-        const mixed = (i < a.length ? a[i] : 0) + (i < b.length ? b[i] : 0);
-        out[i] = Math.max(-32768, Math.min(32767, mixed));
+    if (isDjInput) {
+      if (broadcasterSocketId) {
+        io.to(broadcasterSocketId).volatile.emit('dj-input-audio', data);
       }
-      cohostBuffer = null;
-      const mixedBuf = Buffer.from(out.buffer);
-      io.to('listeners').volatile.emit('audio-stream', mixedBuf);
-      writeToStreamClients(mixedBuf);
-    } else {
-      io.to('listeners').volatile.emit('audio-stream', data);
-      writeToStreamClients(data);
+      return;
     }
+
+    // Broadcaster audio — send directly to listeners (already includes co-host via AudioContext)
+    io.to('listeners').volatile.emit('audio-stream', data);
+    writeToStreamClients(data);
   });
 
   // STATION CONTROLS
@@ -790,11 +827,18 @@ io.on('connection', (socket) => {
     if (isCoHost && cohostSocketId === socket.id) {
       cohostSocketId = null;
       cohostMicAllowed = false;
-      cohostBuffer = null;
       if (broadcasterSocketId) {
         io.to(broadcasterSocketId).emit('cohost-left');
       }
       console.log('🎙️  Co-host disconnected');
+    }
+    if (isDjInput && djInputSocketId === socket.id) {
+      djInputSocketId = null;
+      djInputAllowed = false;
+      if (broadcasterSocketId) {
+        io.to(broadcasterSocketId).emit('dj-input-left');
+      }
+      console.log('🎧  DJ input disconnected');
     }
   });
 

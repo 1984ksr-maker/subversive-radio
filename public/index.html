@@ -565,11 +565,11 @@
       const serverUrl = window.location.origin;
       socket = io(serverUrl, {
         reconnection: true,
-        reconnectionDelay: 500,           // start reconnecting fast
-        reconnectionDelayMax: 3000,       // max 3s between retries
-        reconnectionAttempts: Infinity,   // NEVER stop trying
-        timeout: 30000,                   // 30s connection timeout
-        transports: ['websocket', 'polling'],
+        reconnectionDelay: 500,
+        reconnectionDelayMax: 3000,
+        reconnectionAttempts: Infinity,
+        timeout: 30000,
+        transports: ['polling', 'websocket'],
         upgrade: true,
         forceNew: false
       });
@@ -754,7 +754,18 @@
 
     function playAudioChunk(arrayBuffer) {
       try {
-        const int16 = new Int16Array(arrayBuffer);
+        let int16;
+        if (arrayBuffer instanceof ArrayBuffer) {
+          int16 = new Int16Array(arrayBuffer);
+        } else if (arrayBuffer.buffer) {
+          // Node.js Buffer or TypedArray — may have non-zero byteOffset
+          const aligned = new Uint8Array(arrayBuffer).buffer;
+          int16 = new Int16Array(aligned);
+        } else {
+          return;
+        }
+        if (int16.length === 0) return;
+
         const float32 = new Float32Array(int16.length);
         for (let i = 0; i < int16.length; i++) {
           float32[i] = int16[i] / 32768;
@@ -782,8 +793,15 @@
 
         activeSources.push(source);
         source.onended = () => {
-          activeSources = activeSources.filter(s => s !== source);
+          const idx = activeSources.indexOf(source);
+          if (idx !== -1) activeSources.splice(idx, 1);
         };
+
+        // Safety: if too many sources queued, something is wrong — flush old ones
+        if (activeSources.length > 20) {
+          const stale = activeSources.splice(0, activeSources.length - 10);
+          stale.forEach(s => { try { s.stop(); } catch(e) {} });
+        }
 
         nextPlayTime += duration;
       } catch (e) {}
@@ -794,7 +812,7 @@
 
       if (!isListening) {
         if (!audioContext) initAudio();
-        if (audioContext.state === 'suspended') audioContext.resume();
+        audioContext.resume().catch(() => {});
         isListening = true;
         nextPlayTime = 0;
         btn.textContent = 'LISTENING';
@@ -948,6 +966,8 @@
         const blob = new Blob([buffer], { type: 'audio/wav' });
         const url = URL.createObjectURL(blob);
         silentAudio = new Audio(url);
+        silentAudio.setAttribute('playsinline', '');
+        silentAudio.setAttribute('webkit-playsinline', '');
         silentAudio.loop = true;
         silentAudio.volume = 0.01;
       }

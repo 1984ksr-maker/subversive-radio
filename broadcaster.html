@@ -963,22 +963,6 @@
               <!-- MIC MUTE — always visible -->
               <button class="mic-mute-btn" id="micMuteBtn" onclick="toggleMicMute()">🎙️ MIC ON</button>
 
-              <!-- CO-HOST PANEL -->
-              <div id="cohostPanel" style="width:100%;border:1px solid #333;border-radius:8px;overflow:hidden">
-                <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--surface2)">
-                  <span style="font-size:9px;letter-spacing:2px;color:var(--text-dim)">🎙️2 CO-HOST</span>
-                  <span id="cohostStatusLabel" style="font-size:8px;letter-spacing:1px;color:#555">CLOSED</span>
-                </div>
-                <div style="padding:8px 12px;display:flex;flex-direction:column;gap:6px">
-                  <button id="cohostAccessBtn" onclick="toggleCohostAccess()" style="width:100%;padding:8px;border-radius:6px;border:1px solid #333;background:var(--surface);color:var(--text-dim);font-family:inherit;font-size:10px;letter-spacing:1px;cursor:pointer;transition:all 0.2s">OPEN ACCESS</button>
-                  <div id="cohostConnectedRow" style="display:none;display:none;align-items:center;gap:8px;padding:6px 0">
-                    <div id="cohostDot" style="width:8px;height:8px;border-radius:50%;background:var(--green);flex-shrink:0"></div>
-                    <span id="cohostConnectedName" style="font-size:11px;flex:1">—</span>
-                    <button id="cohostMicBtn" onclick="toggleCohostMic()" style="padding:6px 14px;border-radius:6px;border:1px solid #333;background:var(--surface);color:var(--text-dim);font-family:inherit;font-size:9px;letter-spacing:1px;cursor:pointer;transition:all 0.2s">ALLOW MIC</button>
-                  </div>
-                </div>
-              </div>
-
               <!-- SINGLE DEVICE SELECTOR — shows ALL audio inputs -->
               <div style="width:100%;display:flex;flex-direction:column;gap:6px">
                 <div style="display:flex;gap:6px;align-items:center">
@@ -1290,6 +1274,12 @@
               <input type="range" id="musicVolume" min="0" max="1.5" step="0.01" value="0.5" oninput="updateMusicVol()">
               <span class="value" id="musicVolVal">50%</span>
             </div>
+            <div style="display:flex;gap:6px;justify-content:center;margin:4px 0 8px">
+              <button onclick="duckMusic(0.06)" style="padding:4px 12px;border-radius:6px;border:1px solid #444;background:var(--surface);color:var(--text-dim);font-family:inherit;font-size:10px;cursor:pointer;letter-spacing:1px">6%</button>
+              <button onclick="duckMusic(0.25)" style="padding:4px 12px;border-radius:6px;border:1px solid #444;background:var(--surface);color:var(--text-dim);font-family:inherit;font-size:10px;cursor:pointer;letter-spacing:1px">25%</button>
+              <button onclick="duckMusic(0.5)" style="padding:4px 12px;border-radius:6px;border:1px solid #444;background:var(--surface);color:var(--text-dim);font-family:inherit;font-size:10px;cursor:pointer;letter-spacing:1px">50%</button>
+              <button onclick="duckMusic(1.0)" style="padding:4px 12px;border-radius:6px;border:1px solid #444;background:var(--surface);color:var(--text-dim);font-family:inherit;font-size:10px;cursor:pointer;letter-spacing:1px">100%</button>
+            </div>
             <div class="control-row">
               <label>Mic Vol</label>
               <input type="range" id="micMixVol" min="0" max="1.5" step="0.01" value="1.0" oninput="updateMicMixVol()">
@@ -1360,6 +1350,52 @@
               <label style="font-size:9px;color:var(--text-dim);display:flex;align-items:center;gap:4px;cursor:pointer">
                 <input type="checkbox" id="extMonitor" onchange="updateExtMonitor()"> Monitor
               </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- REMOTE SOURCES: CO-HOST + DJ INPUT -->
+        <div class="mixer-grid">
+          <div class="panel-section">
+            <h2>🎙️ Co-Host</h2>
+            <div id="cohostPanel" style="width:100%;border:1px solid #333;border-radius:8px;overflow:hidden">
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--surface2)">
+                <span style="font-size:10px;letter-spacing:1px;color:var(--text-dim)">Remote mic for a co-host</span>
+                <span id="cohostStatusLabel" style="font-size:8px;letter-spacing:1px;color:#555">CLOSED</span>
+              </div>
+              <div style="padding:8px 12px;display:flex;flex-direction:column;gap:6px">
+                <button id="cohostAccessBtn" onclick="toggleCohostAccess()" style="width:100%;padding:8px;border-radius:6px;border:1px solid #333;background:var(--surface);color:var(--text-dim);font-family:inherit;font-size:10px;letter-spacing:1px;cursor:pointer;transition:all 0.2s">OPEN ACCESS</button>
+                <div id="cohostConnectedRow" style="display:none;align-items:center;gap:8px;padding:6px 0">
+                  <div id="cohostDot" style="width:8px;height:8px;border-radius:50%;background:var(--green);flex-shrink:0"></div>
+                  <span id="cohostConnectedName" style="font-size:11px;flex:1">—</span>
+                  <button id="cohostMicBtn" onclick="toggleCohostMic()" style="padding:6px 14px;border-radius:6px;border:1px solid #333;background:var(--surface);color:var(--text-dim);font-family:inherit;font-size:9px;letter-spacing:1px;cursor:pointer;transition:all 0.2s">ALLOW MIC</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel-section">
+            <h2>🎧 DJ Input</h2>
+            <div id="djInputPanel" style="width:100%;border:1px solid #333;border-radius:8px;overflow:hidden">
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--surface2)">
+                <span style="font-size:10px;letter-spacing:1px;color:var(--text-dim)">Stream audio from iPad / phone / computer</span>
+                <span id="djInputStatusLabel" style="font-size:8px;letter-spacing:1px;color:#555">CLOSED</span>
+              </div>
+              <div style="padding:8px 12px;display:flex;flex-direction:column;gap:6px">
+                <button id="djInputAccessBtn" onclick="toggleDjInputAccess()" style="width:100%;padding:8px;border-radius:6px;border:1px solid #333;background:var(--surface);color:var(--text-dim);font-family:inherit;font-size:10px;letter-spacing:1px;cursor:pointer;transition:all 0.2s">OPEN ACCESS</button>
+                <div id="djInputConnectedRow" style="display:none;align-items:center;gap:8px;padding:6px 0">
+                  <div style="width:8px;height:8px;border-radius:50%;background:var(--green);flex-shrink:0"></div>
+                  <span id="djInputConnectedName" style="font-size:11px;flex:1">—</span>
+                  <button id="djInputToggleBtn" onclick="toggleDjInput()" style="padding:6px 14px;border-radius:6px;border:1px solid #333;background:var(--surface);color:var(--text-dim);font-family:inherit;font-size:9px;letter-spacing:1px;cursor:pointer;transition:all 0.2s">ENABLE</button>
+                </div>
+                <div id="djInputLinkSection" style="display:none;padding:4px 0">
+                  <div style="display:flex;gap:6px">
+                    <input type="text" id="djInputLink" readonly style="flex:1;background:#111;border:1px solid #333;border-radius:6px;padding:6px 10px;color:var(--text-dim);font-family:inherit;font-size:10px">
+                    <button onclick="navigator.clipboard.writeText(document.getElementById('djInputLink').value).then(()=>{this.textContent='✓';setTimeout(()=>{this.textContent='COPY'},1500)})" style="padding:6px 10px;border-radius:6px;border:1px solid var(--green);background:var(--surface);color:var(--green);font-family:inherit;font-size:9px;cursor:pointer">COPY</button>
+                  </div>
+                  <div style="font-size:8px;color:#555;margin-top:4px">Open this link on the remote device</div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1572,11 +1608,15 @@
     });
 
     // INPUT DEVICES — loads ALL audio input devices (mics, interfaces, line-in, USB)
+    let audioPermissionGranted = false;
     async function loadAllInputDevices() {
       try {
-        // Request permission so device labels appear
-        const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        tempStream.getTracks().forEach(t => t.stop());
+        // Only request mic permission once to unlock device labels
+        if (!audioPermissionGranted) {
+          const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          tempStream.getTracks().forEach(t => t.stop());
+          audioPermissionGranted = true;
+        }
 
         const devices = await navigator.mediaDevices.enumerateDevices();
         const audioInputs = devices.filter(d => d.kind === 'audioinput');
@@ -1909,10 +1949,11 @@
           if (!isLive) return;
           const inputData = e.inputBuffer.getChannelData(0);
 
-          // Noise gate — only when no music/radio/capture is playing (gate would chop music)
+          // Noise gate — only when no other audio sources are active (gate would chop them)
           const musicPlaying = (musicAudioElement && !musicAudioElement.paused) || (radioAudioElement && !radioAudioElement.paused);
           const captureActive = !!systemAudioSource;
-          if (gateEnabled && !musicPlaying && !captureActive) {
+          const cohostOn = cohostActive;
+          if (gateEnabled && !musicPlaying && !captureActive && !cohostOn && !extConnected && !djInputActive) {
             let rms = 0;
             for (let i = 0; i < inputData.length; i++) rms += inputData[i] * inputData[i];
             rms = Math.sqrt(rms / inputData.length);
@@ -1920,10 +1961,33 @@
             if (dbRms < gateThreshold) return;
           }
 
-          // Always send 16-bit for quality
-          const pcmData = new Int16Array(inputData.length);
-          for (let i = 0; i < inputData.length; i++) {
-            const s = Math.max(-1, Math.min(1, inputData[i]));
+          // Mix in remote audio (co-host + DJ input) — directly into PCM, bypasses speakers
+          let outputData = inputData;
+          const hasCohostAudio = cohostPcmQueue.length > 0;
+          const hasDjAudio = djInputPcmQueue.length > 0;
+          if (hasCohostAudio || hasDjAudio) {
+            outputData = new Float32Array(inputData.length);
+            outputData.set(inputData);
+            if (hasCohostAudio) {
+              const chunk = cohostPcmQueue.shift();
+              const len = Math.min(outputData.length, chunk.length);
+              for (let i = 0; i < len; i++) outputData[i] += chunk[i];
+            }
+            if (hasDjAudio) {
+              const chunk = djInputPcmQueue.shift();
+              const len = Math.min(outputData.length, chunk.length);
+              for (let i = 0; i < len; i++) outputData[i] += chunk[i];
+            }
+            // Clamp after mixing all sources
+            for (let i = 0; i < outputData.length; i++) {
+              if (outputData[i] > 1) outputData[i] = 1;
+              else if (outputData[i] < -1) outputData[i] = -1;
+            }
+          }
+
+          const pcmData = new Int16Array(outputData.length);
+          for (let i = 0; i < outputData.length; i++) {
+            const s = Math.max(-1, Math.min(1, outputData[i]));
             pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
           }
           socket.emit('audio-stream', pcmData.buffer);
@@ -2013,6 +2077,18 @@
       }
       if (monitorGainNode) {
         try { outputGainNode.connect(monitorGainNode); } catch(e) {}
+      }
+
+      // Reconnect all other audio sources to limiterNode (they were dropped by disconnect)
+      if (musicGainNode) { try { musicGainNode.connect(limiterNode); } catch(e) {} }
+      if (radioGainNode) { try { radioGainNode.connect(limiterNode); } catch(e) {} }
+      if (systemAudioGain) { try { systemAudioGain.connect(limiterNode); } catch(e) {} }
+      if (extConnected && extInputPanner) {
+        if (sourceMode === 'external') {
+          try { extInputPanner.connect(highPassFilter); } catch(e) {}
+        } else {
+          try { extInputPanner.connect(limiterNode); } catch(e) {}
+        }
       }
     }
 
@@ -2943,73 +3019,63 @@
       setTimeout(() => { document.getElementById('directAudioStatus').style.display = 'none'; }, 3000);
     }
 
-    // ===== FADE IN / FADE OUT / CROSSFADE =====
-    let fadeInterval = null;
+    // ===== DUCK / FADE IN / FADE OUT / CROSSFADE =====
+    let fadeTimer = null;
     let musicTargetVol = 0.5;
 
+    function duckMusic(level) {
+      const slider = document.getElementById('musicVolume');
+      slider.value = level;
+      updateMusicVol();
+    }
+
     function fadeInMusic() {
-      if (!musicGainNode) return;
+      if (!musicGainNode || !audioContext) return;
       const fadeTime = parseFloat(document.getElementById('fadeTime').value);
       const targetVol = parseFloat(document.getElementById('musicVolume').value);
       musicTargetVol = targetVol;
 
-      // Start from 0 if music is paused
       if (musicAudioElement && musicAudioElement.paused) {
         musicGainNode.gain.value = 0;
         playMusic();
       }
 
-      clearInterval(fadeInterval);
-      const startVol = musicGainNode.gain.value;
-      const steps = Math.ceil(fadeTime * 30); // 30fps
-      const volStep = (targetVol - startVol) / steps;
-      let step = 0;
+      if (fadeTimer) clearTimeout(fadeTimer);
+      musicGainNode.gain.cancelScheduledValues(audioContext.currentTime);
+      musicGainNode.gain.setValueAtTime(musicGainNode.gain.value, audioContext.currentTime);
+      musicGainNode.gain.linearRampToValueAtTime(targetVol, audioContext.currentTime + fadeTime);
 
       document.getElementById('fadeStatus').textContent = 'FADING IN...';
       document.getElementById('fadeInBtn').classList.add('active');
 
-      fadeInterval = setInterval(() => {
-        step++;
-        musicGainNode.gain.value = Math.min(startVol + volStep * step, targetVol);
-        if (step >= steps) {
-          clearInterval(fadeInterval);
-          fadeInterval = null;
-          musicGainNode.gain.value = targetVol;
-          document.getElementById('fadeStatus').textContent = '';
-          document.getElementById('fadeInBtn').classList.remove('active');
-        }
-      }, 1000 / 30);
+      fadeTimer = setTimeout(() => {
+        document.getElementById('fadeStatus').textContent = '';
+        document.getElementById('fadeInBtn').classList.remove('active');
+        fadeTimer = null;
+      }, fadeTime * 1000);
     }
 
     function fadeOutMusic() {
-      if (!musicGainNode) return;
+      if (!musicGainNode || !audioContext) return;
       const fadeTime = parseFloat(document.getElementById('fadeTime').value);
 
-      clearInterval(fadeInterval);
-      const startVol = musicGainNode.gain.value;
-      const steps = Math.ceil(fadeTime * 30);
-      const volStep = startVol / steps;
-      let step = 0;
+      if (fadeTimer) clearTimeout(fadeTimer);
+      musicGainNode.gain.cancelScheduledValues(audioContext.currentTime);
+      musicGainNode.gain.setValueAtTime(musicGainNode.gain.value, audioContext.currentTime);
+      musicGainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + fadeTime);
 
       document.getElementById('fadeStatus').textContent = 'FADING OUT...';
       document.getElementById('fadeOutBtn').classList.add('active');
 
-      fadeInterval = setInterval(() => {
-        step++;
-        musicGainNode.gain.value = Math.max(startVol - volStep * step, 0);
-        if (step >= steps) {
-          clearInterval(fadeInterval);
-          fadeInterval = null;
-          musicGainNode.gain.value = 0;
-          if (musicAudioElement) musicAudioElement.pause();
-          document.getElementById('musicPlayBtn').textContent = '▶';
-          document.getElementById('fadeStatus').textContent = '';
-          document.getElementById('fadeOutBtn').classList.remove('active');
-        }
-      }, 1000 / 30);
+      fadeTimer = setTimeout(() => {
+        if (musicAudioElement) musicAudioElement.pause();
+        document.getElementById('musicPlayBtn').textContent = '▶';
+        document.getElementById('fadeStatus').textContent = '';
+        document.getElementById('fadeOutBtn').classList.remove('active');
+        fadeTimer = null;
+      }, fadeTime * 1000);
     }
 
-    // Crossfade: fade out current track while fading in next
     function crossfadeToNext() {
       const crossTime = parseFloat(document.getElementById('crossfadeTime').value);
       if (crossTime <= 0 || playlist.length < 2) {
@@ -3017,43 +3083,36 @@
         return;
       }
 
-      if (!musicGainNode) { nextTrack(); return; }
+      if (!musicGainNode || !audioContext) { nextTrack(); return; }
 
       const startVol = musicGainNode.gain.value;
-      const steps = Math.ceil(crossTime * 30);
-      let step = 0;
+      const now = audioContext.currentTime;
+      const switchPoint = crossTime * 0.3;
 
-      // Start fading out current
       document.getElementById('fadeStatus').textContent = 'CROSSFADING...';
-      clearInterval(fadeInterval);
+      if (fadeTimer) clearTimeout(fadeTimer);
 
-      fadeInterval = setInterval(() => {
-        step++;
-        const progress = step / steps;
-        // Fade out current
-        musicGainNode.gain.value = startVol * (1 - progress);
+      // Fade out current track
+      musicGainNode.gain.cancelScheduledValues(now);
+      musicGainNode.gain.setValueAtTime(startVol, now);
+      musicGainNode.gain.linearRampToValueAtTime(0, now + switchPoint);
 
-        if (step >= Math.floor(steps * 0.3) && step === Math.floor(steps * 0.3)) {
-          // At 30% through, load and play next track
-          const next = (currentTrackIndex + 1) % playlist.length;
-          loadTrack(next);
-          musicGainNode.gain.value = 0;
-          playMusic();
+      // At 30%, load next and fade in
+      setTimeout(() => {
+        const next = (currentTrackIndex + 1) % playlist.length;
+        loadTrack(next);
+        if (musicGainNode) {
+          musicGainNode.gain.cancelScheduledValues(audioContext.currentTime);
+          musicGainNode.gain.setValueAtTime(0, audioContext.currentTime);
+          musicGainNode.gain.linearRampToValueAtTime(startVol, audioContext.currentTime + (crossTime - switchPoint));
         }
+        playMusic();
+      }, switchPoint * 1000);
 
-        if (step > Math.floor(steps * 0.3)) {
-          // Fade in new track
-          const fadeInProgress = (step - Math.floor(steps * 0.3)) / (steps - Math.floor(steps * 0.3));
-          musicGainNode.gain.value = startVol * fadeInProgress;
-        }
-
-        if (step >= steps) {
-          clearInterval(fadeInterval);
-          fadeInterval = null;
-          musicGainNode.gain.value = startVol;
-          document.getElementById('fadeStatus').textContent = '';
-        }
-      }, 1000 / 30);
+      fadeTimer = setTimeout(() => {
+        document.getElementById('fadeStatus').textContent = '';
+        fadeTimer = null;
+      }, crossTime * 1000);
     }
 
     // VOICE EFFECTS
@@ -3229,8 +3288,7 @@
             echoCancellation: false,
             noiseSuppression: false,
             autoGainControl: false,
-            channelCount: stereo ? 2 : 1,
-            sampleRate: { ideal: 48000 }
+            channelCount: stereo ? 2 : 1
           }
         };
 
@@ -3504,6 +3562,39 @@
       msgs.forEach(m => { m.style.opacity = '0.3'; });
     });
 
+    // ========== CO-HOST AUDIO ==========
+    // Mixed directly into the ScriptProcessor output — never touches monitor/speakers (no feedback)
+    let cohostPcmQueue = [];
+    let cohostActive = false;
+
+    function teardownCohostAudio() {
+      cohostPcmQueue = [];
+      cohostActive = false;
+    }
+
+    socket.on('cohost-audio', (data) => {
+      if (!audioContext || !processorNode || !isLive) return;
+
+      let pcm16;
+      if (data instanceof ArrayBuffer) {
+        pcm16 = new Int16Array(data);
+      } else if (data && data.buffer) {
+        const aligned = new Uint8Array(data).buffer;
+        pcm16 = new Int16Array(aligned);
+      } else {
+        return;
+      }
+      if (pcm16.length === 0) return;
+
+      const floats = new Float32Array(pcm16.length);
+      for (let i = 0; i < pcm16.length; i++) {
+        floats[i] = pcm16[i] / 32768;
+      }
+      cohostPcmQueue.push(floats);
+      cohostActive = true;
+      while (cohostPcmQueue.length > 4) cohostPcmQueue.shift();
+    });
+
     // ========== CO-HOST CONTROL ==========
     let cohostAccessOpen = false;
     let cohostMicOn = false;
@@ -3574,6 +3665,7 @@
       if (!cohostAccessOpen) {
         document.getElementById('cohostConnectedName').dataset.connected = '';
         cohostMicOn = false;
+        teardownCohostAudio();
       }
       updateCohostPanel();
     }
@@ -3590,14 +3682,141 @@
       document.getElementById('cohostConnectedName').dataset.connected = '';
       document.getElementById('cohostConnectedName').textContent = '—';
       cohostMicOn = false;
+      teardownCohostAudio();
       updateCohostPanel();
     });
 
     function toggleCohostMic() {
       cohostMicOn = !cohostMicOn;
       socket.emit('cohost-mic-toggle', cohostMicOn);
+      if (!cohostMicOn) teardownCohostAudio();
       updateCohostPanel();
     }
+
+    // ========== DJ INPUT CONTROL ==========
+    let djInputAccessOpen = false;
+    let djInputOn = false;
+    let djInputPcmQueue = [];
+    let djInputActive = false;
+
+    function updateDjInputPanel() {
+      const accessBtn = document.getElementById('djInputAccessBtn');
+      const statusLabel = document.getElementById('djInputStatusLabel');
+      const connRow = document.getElementById('djInputConnectedRow');
+      const toggleBtn = document.getElementById('djInputToggleBtn');
+      const linkSection = document.getElementById('djInputLinkSection');
+      const linkInput = document.getElementById('djInputLink');
+      const panel = document.getElementById('djInputPanel');
+
+      if (!djInputAccessOpen) {
+        accessBtn.textContent = 'OPEN ACCESS';
+        accessBtn.style.borderColor = '#333';
+        accessBtn.style.color = 'var(--text-dim)';
+        accessBtn.style.background = 'var(--surface)';
+        statusLabel.textContent = 'CLOSED';
+        statusLabel.style.color = '#555';
+        connRow.style.display = 'none';
+        linkSection.style.display = 'none';
+        panel.style.borderColor = '#333';
+      } else if (!document.getElementById('djInputConnectedName').dataset.connected) {
+        accessBtn.textContent = 'CLOSE ACCESS';
+        accessBtn.style.borderColor = 'var(--amber)';
+        accessBtn.style.color = 'var(--amber)';
+        accessBtn.style.background = 'rgba(255,170,0,0.1)';
+        statusLabel.textContent = 'WAITING...';
+        statusLabel.style.color = 'var(--amber)';
+        connRow.style.display = 'none';
+        linkInput.value = window.location.origin + '/dj-input';
+        linkSection.style.display = 'block';
+        panel.style.borderColor = 'var(--amber)';
+      } else {
+        accessBtn.textContent = 'CLOSE ACCESS';
+        accessBtn.style.borderColor = 'var(--red)';
+        accessBtn.style.color = 'var(--red)';
+        accessBtn.style.background = 'rgba(255,45,45,0.1)';
+        connRow.style.display = 'flex';
+        linkSection.style.display = 'none';
+        panel.style.borderColor = djInputOn ? '#00ccff' : 'var(--green)';
+
+        if (djInputOn) {
+          statusLabel.textContent = 'STREAMING';
+          statusLabel.style.color = '#00ccff';
+          toggleBtn.textContent = 'DISABLE';
+          toggleBtn.style.background = '#00ccff';
+          toggleBtn.style.borderColor = '#00ccff';
+          toggleBtn.style.color = '#000';
+        } else {
+          statusLabel.textContent = 'CONNECTED';
+          statusLabel.style.color = 'var(--green)';
+          toggleBtn.textContent = 'ENABLE';
+          toggleBtn.style.background = 'var(--surface)';
+          toggleBtn.style.borderColor = 'var(--green)';
+          toggleBtn.style.color = 'var(--green)';
+        }
+      }
+    }
+
+    function toggleDjInputAccess() {
+      djInputAccessOpen = !djInputAccessOpen;
+      socket.emit('dj-input-access-toggle', djInputAccessOpen);
+      if (!djInputAccessOpen) {
+        document.getElementById('djInputConnectedName').dataset.connected = '';
+        djInputOn = false;
+        djInputPcmQueue = [];
+        djInputActive = false;
+      }
+      updateDjInputPanel();
+    }
+
+    function toggleDjInput() {
+      djInputOn = !djInputOn;
+      socket.emit('dj-input-toggle', djInputOn);
+      if (!djInputOn) {
+        djInputPcmQueue = [];
+        djInputActive = false;
+      }
+      updateDjInputPanel();
+    }
+
+    socket.on('dj-input-joined', (info) => {
+      const nameEl = document.getElementById('djInputConnectedName');
+      nameEl.textContent = info.name || 'DJ Input';
+      nameEl.dataset.connected = '1';
+      djInputOn = false;
+      updateDjInputPanel();
+    });
+
+    socket.on('dj-input-left', () => {
+      document.getElementById('djInputConnectedName').dataset.connected = '';
+      document.getElementById('djInputConnectedName').textContent = '—';
+      djInputOn = false;
+      djInputPcmQueue = [];
+      djInputActive = false;
+      updateDjInputPanel();
+    });
+
+    socket.on('dj-input-audio', (data) => {
+      if (!audioContext || !processorNode || !isLive) return;
+
+      let pcm16;
+      if (data instanceof ArrayBuffer) {
+        pcm16 = new Int16Array(data);
+      } else if (data && data.buffer) {
+        const aligned = new Uint8Array(data).buffer;
+        pcm16 = new Int16Array(aligned);
+      } else {
+        return;
+      }
+      if (pcm16.length === 0) return;
+
+      const floats = new Float32Array(pcm16.length);
+      for (let i = 0; i < pcm16.length; i++) {
+        floats[i] = pcm16[i] / 32768;
+      }
+      djInputPcmQueue.push(floats);
+      djInputActive = true;
+      while (djInputPcmQueue.length > 4) djInputPcmQueue.shift();
+    });
 
     function showSidebarTab(tab) {
       document.getElementById('sidebarChat').style.display = tab === 'chat' ? 'flex' : 'none';
