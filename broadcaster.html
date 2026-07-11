@@ -1343,13 +1343,23 @@
               <input type="range" id="extInputPan" min="-1" max="1" step="0.01" value="0" oninput="updateExtPan()">
               <span class="value" id="extPanVal">C</span>
             </div>
-            <div style="display:flex;gap:6px;margin-top:8px">
+            <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
               <label style="font-size:9px;color:var(--text-dim);display:flex;align-items:center;gap:4px;cursor:pointer">
                 <input type="checkbox" id="extStereo" checked onchange="reconnectExtInput()"> Stereo
               </label>
               <label style="font-size:9px;color:var(--text-dim);display:flex;align-items:center;gap:4px;cursor:pointer">
                 <input type="checkbox" id="extMonitor" onchange="updateExtMonitor()"> Monitor
               </label>
+              <label style="font-size:9px;color:var(--amber);display:flex;align-items:center;gap:4px;cursor:pointer;font-weight:bold" title="Auto-lower music when you talk">
+                <input type="checkbox" id="autoDuck" checked> Auto-Duck
+              </label>
+            </div>
+            <div id="autoDuckSettings" style="margin-top:6px;padding:6px 8px;background:#0a0a0a;border-radius:6px;border:1px solid #222">
+              <div class="control-row" style="margin-bottom:4px">
+                <label style="font-size:8px;letter-spacing:1px">DUCK TO</label>
+                <input type="range" id="autoDuckLevel" min="0" max="0.5" step="0.01" value="0.15" oninput="document.getElementById('autoDuckVal').textContent=Math.round(this.value*100)+'%'">
+                <span class="value" id="autoDuckVal" style="font-size:9px">15%</span>
+              </div>
             </div>
           </div>
         </div>
@@ -1542,6 +1552,12 @@
     let peakL = 0, peakR = 0, peakOut = 0;
     let currentSampleRate = 44100;
     let currentBitDepth = 16;
+
+    // Auto-duck state
+    let autoDuckActive = false;
+    let autoDuckRelease = 0;
+    let micAnalyserNode = null;
+    let micAnalyserBuf = null;
     let currentBufferSize = 4096;
 
     // Source mode: 'mic', 'external', 'both'
@@ -1924,6 +1940,11 @@
         // Recording destination
         recordDestination = audioContext.createMediaStreamDestination();
 
+        // Mic analyser for auto-duck — measures mic level before any processing
+        micAnalyserNode = audioContext.createAnalyser();
+        micAnalyserNode.fftSize = 1024;
+        sourceNode.connect(micAnalyserNode);
+
         // Build chain: source → highPass → gainNode → [EQ] → [comp → makeup] → limiter → output
         sourceNode.connect(highPassFilter);
         highPassFilter.connect(gainNode);
@@ -1948,6 +1969,56 @@
         processorNode.onaudioprocess = (e) => {
           if (!isLive) return;
           const inputData = e.inputBuffer.getChannelData(0);
+
+          // Auto-duck: lower ext/music volume when mic detects voice
+          if (document.getElementById('autoDuck').checked && micAnalyserNode && (extConnected || musicGainNode)) {
+            if (!micAnalyserBuf) micAnalyserBuf = new Float32Array(micAnalyserNode.fftSize);
+            micAnalyserNode.getFloatTimeDomainData(micAnalyserBuf);
+            let micRms = 0;
+            for (let i = 0; i < micAnalyserBuf.length; i++) micRms += micAnalyserBuf[i] * micAnalyserBuf[i];
+            micRms = Math.sqrt(micRms / micAnalyserBuf.length);
+            const micDb = 20 * Math.log10(micRms + 1e-10);
+            const duckLevel = parseFloat(document.getElementById('autoDuckLevel').value);
+
+            if (micDb > -35) {
+              // Voice detected — duck
+              if (!autoDuckActive) {
+                autoDuckActive = true;
+                const now = audioContext.currentTime;
+                if (extInputGain) {
+                  extInputGain.gain.cancelScheduledValues(now);
+                  extInputGain.gain.setValueAtTime(extInputGain.gain.value, now);
+                  extInputGain.gain.linearRampToValueAtTime(duckLevel * parseFloat(document.getElementById('extInputVolume').value), now + 0.15);
+                }
+                if (musicGainNode) {
+                  musicGainNode.gain.cancelScheduledValues(now);
+                  musicGainNode.gain.setValueAtTime(musicGainNode.gain.value, now);
+                  musicGainNode.gain.linearRampToValueAtTime(duckLevel * parseFloat(document.getElementById('musicVolume').value), now + 0.15);
+                }
+              }
+              autoDuckRelease = 0;
+            } else if (autoDuckActive) {
+              // Voice stopped — wait a bit then restore
+              autoDuckRelease++;
+              if (autoDuckRelease > 8) {
+                autoDuckActive = false;
+                autoDuckRelease = 0;
+                const now = audioContext.currentTime;
+                if (extInputGain) {
+                  const extVol = parseFloat(document.getElementById('extInputVolume').value);
+                  extInputGain.gain.cancelScheduledValues(now);
+                  extInputGain.gain.setValueAtTime(extInputGain.gain.value, now);
+                  extInputGain.gain.linearRampToValueAtTime(extVol, now + 0.4);
+                }
+                if (musicGainNode) {
+                  const musVol = parseFloat(document.getElementById('musicVolume').value);
+                  musicGainNode.gain.cancelScheduledValues(now);
+                  musicGainNode.gain.setValueAtTime(musicGainNode.gain.value, now);
+                  musicGainNode.gain.linearRampToValueAtTime(musVol, now + 0.4);
+                }
+              }
+            }
+          }
 
           // Check which sources are active
           const musicPlaying = (musicAudioElement && !musicAudioElement.paused) || (radioAudioElement && !radioAudioElement.paused);
