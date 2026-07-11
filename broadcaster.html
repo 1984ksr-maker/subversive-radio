@@ -3288,7 +3288,9 @@
             echoCancellation: false,
             noiseSuppression: false,
             autoGainControl: false,
-            channelCount: stereo ? 2 : 1
+            channelCount: stereo ? 2 : 1,
+            sampleRate: { ideal: currentSampleRate || 44100 },
+            latency: { ideal: 0.01 }
           }
         };
 
