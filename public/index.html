@@ -557,8 +557,8 @@
 
     // Audio buffer queue for smooth playback
     let nextPlayTime = 0;
-    const BUFFER_AHEAD = 0.15;
-    const MAX_BUFFER_AHEAD = 0.8;
+    const BUFFER_AHEAD = 0.25;
+    const MAX_BUFFER_AHEAD = 1.5;
     let activeSources = [];
 
     function connectSocket() {

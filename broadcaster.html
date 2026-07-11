@@ -1949,11 +1949,16 @@
           if (!isLive) return;
           const inputData = e.inputBuffer.getChannelData(0);
 
-          // Noise gate — only when no other audio sources are active (gate would chop them)
+          // Check which sources are active
           const musicPlaying = (musicAudioElement && !musicAudioElement.paused) || (radioAudioElement && !radioAudioElement.paused);
           const captureActive = !!systemAudioSource;
           const cohostOn = cohostActive;
-          if (gateEnabled && !musicPlaying && !captureActive && !cohostOn && !extConnected && !djInputActive) {
+          const hasCohostAudio = cohostPcmQueue.length > 0;
+          const hasDjAudio = djInputPcmQueue.length > 0;
+          const anySourceActive = musicPlaying || captureActive || cohostOn || extConnected || djInputActive || hasCohostAudio || hasDjAudio;
+
+          // Noise gate — ONLY when mic is the sole source and nothing else is playing
+          if (gateEnabled && !anySourceActive) {
             let rms = 0;
             for (let i = 0; i < inputData.length; i++) rms += inputData[i] * inputData[i];
             rms = Math.sqrt(rms / inputData.length);
@@ -1963,8 +1968,6 @@
 
           // Mix in remote audio (co-host + DJ input) — directly into PCM, bypasses speakers
           let outputData = inputData;
-          const hasCohostAudio = cohostPcmQueue.length > 0;
-          const hasDjAudio = djInputPcmQueue.length > 0;
           if (hasCohostAudio || hasDjAudio) {
             outputData = new Float32Array(inputData.length);
             outputData.set(inputData);
