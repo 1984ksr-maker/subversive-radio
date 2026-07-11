@@ -1873,8 +1873,8 @@
 
         // Input gain — dB slider mapped to linear
         gainNode = audioContext.createGain();
-        if (sourceMode === 'external' || sourceMode === 'music') {
-          gainNode.gain.value = 0; // mute mic path in external/music-only mode
+        if (sourceMode === 'music') {
+          gainNode.gain.value = 0; // mute mic path in music-only mode
         } else {
           gainNode.gain.value = dbToGain(parseFloat(document.getElementById('inputGain').value));
         }
@@ -2159,11 +2159,7 @@
       if (radioGainNode) { try { radioGainNode.connect(limiterNode); } catch(e) {} }
       if (systemAudioGain) { try { systemAudioGain.connect(limiterNode); } catch(e) {} }
       if (extConnected && extInputPanner) {
-        if (sourceMode === 'external') {
-          try { extInputPanner.connect(highPassFilter); } catch(e) {}
-        } else {
-          try { extInputPanner.connect(limiterNode); } catch(e) {}
-        }
+        try { extInputPanner.connect(limiterNode); } catch(e) {}
       }
     }
 
@@ -3407,31 +3403,12 @@
         extMonitorGain = audioContext.createGain();
         extMonitorGain.gain.value = 0;
 
-        // ===== ROUTING DEPENDS ON SOURCE MODE =====
-        if (sourceMode === 'external') {
-          // EXTERNAL ONLY: route through the FULL main chain (EQ, comp, limiter, output)
-          // Replace the silent source with the external device
-          try { sourceNode.disconnect(); } catch(e) {}
-          extInputSource.connect(extInputGain);
-          extInputGain.connect(extInputPanner);
-          extInputPanner.connect(highPassFilter); // into the MAIN chain
-          extInputPanner.connect(extInputAnalyser); // for metering
-
-          // Monitor path — NOT connected to speakers (prevents feedback)
-          extInputPanner.connect(extMonitorGain);
-
-          // Set gainNode to pass through (not muted) for external signal
-          gainNode.gain.value = dbToGain(parseFloat(document.getElementById('inputGain').value));
-        } else {
-          // MIC + EXTERNAL or MIC ONLY: external goes directly to limiter (additive)
-          extInputSource.connect(extInputGain);
-          extInputGain.connect(extInputPanner);
-          extInputPanner.connect(limiterNode); // into the broadcast output chain
-          extInputPanner.connect(extInputAnalyser); // for metering
-
-          // Monitor path — NOT connected to speakers (prevents feedback)
-          extInputPanner.connect(extMonitorGain);
-        }
+        // External input always goes to limiterNode (additive with mic)
+        extInputSource.connect(extInputGain);
+        extInputGain.connect(extInputPanner);
+        extInputPanner.connect(limiterNode);
+        extInputPanner.connect(extInputAnalyser);
+        extInputPanner.connect(extMonitorGain);
 
         extConnected = true;
 
@@ -3477,18 +3454,6 @@
       if (extInputPanner) { try { extInputPanner.disconnect(); } catch(e) {} extInputPanner = null; }
       if (extInputAnalyser) { try { extInputAnalyser.disconnect(); } catch(e) {} extInputAnalyser = null; }
       if (extMonitorGain) { try { extMonitorGain.disconnect(); } catch(e) {} extMonitorGain = null; }
-
-      // If in external-only mode, restore silent source so chain doesn't break
-      if (sourceMode === 'external' && audioContext) {
-        const silentBuffer = audioContext.createBuffer(1, 1024, currentSampleRate);
-        const silentSource = audioContext.createBufferSource();
-        silentSource.buffer = silentBuffer;
-        silentSource.loop = true;
-        silentSource.start();
-        sourceNode = silentSource;
-        sourceNode.connect(highPassFilter);
-        gainNode.gain.value = 0;
-      }
 
       extConnected = false;
 
