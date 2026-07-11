@@ -12,410 +12,409 @@
       background: #0a0a0a;
       color: #e0e0e0;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
       min-height: 100vh;
       min-height: 100dvh;
-      padding: 20px;
+      padding: 16px;
       -webkit-user-select: none;
       user-select: none;
     }
 
-    .logo { font-size: 11px; letter-spacing: 4px; color: #555; text-transform: uppercase; margin-bottom: 8px; }
-    .title { font-size: 18px; font-weight: 700; letter-spacing: 2px; color: #00ccff; margin-bottom: 30px; }
-
-    .status-box {
-      background: #111;
-      border: 1px solid #222;
-      border-radius: 12px;
-      padding: 16px 24px;
+    .header {
       text-align: center;
-      margin-bottom: 24px;
-      width: 100%;
-      max-width: 320px;
-    }
-
-    .status-label { font-size: 9px; letter-spacing: 2px; color: #555; margin-bottom: 6px; }
-    .status-text { font-size: 14px; font-weight: 600; letter-spacing: 1px; }
-    .status-text.waiting { color: #ffaa00; }
-    .status-text.live { color: #00ff88; }
-    .status-text.muted { color: #ff3333; }
-    .status-text.offline { color: #555; }
-
-    .source-select {
-      width: 100%;
-      max-width: 320px;
       margin-bottom: 20px;
     }
+    .logo { font-size: 10px; letter-spacing: 4px; color: #555; text-transform: uppercase; }
+    .title { font-size: 18px; font-weight: 700; letter-spacing: 2px; color: #00ccff; margin-top: 4px; }
 
-    .source-select label {
-      font-size: 9px; letter-spacing: 2px; color: #555; display: block; margin-bottom: 6px;
-    }
-
-    .source-select select {
-      width: 100%;
+    .status-bar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 16px;
       background: #111;
-      border: 1px solid #333;
-      border-radius: 8px;
-      padding: 10px 14px;
-      color: #e0e0e0;
-      font-family: inherit;
-      font-size: 13px;
-      outline: none;
-      -webkit-appearance: none;
+      border: 1px solid #222;
+      border-radius: 10px;
+      margin-bottom: 16px;
     }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #ff3333; flex-shrink: 0; }
+    .dot.ok { background: #00ff88; }
+    .status-text { font-size: 12px; font-weight: 600; letter-spacing: 1px; }
+    .status-text.waiting { color: #ffaa00; }
+    .status-text.live { color: #00ff88; }
+    .status-text.off { color: #555; }
+    .status-text.err { color: #ff3333; }
 
-    .source-select select:focus { border-color: #00ccff; }
-
-    .stream-btn {
-      width: 140px;
-      height: 140px;
-      border-radius: 50%;
-      border: 3px solid #333;
-      background: #1a1a1a;
-      color: #555;
-      font-size: 40px;
+    .load-btn {
+      width: 100%;
+      padding: 14px;
+      border-radius: 10px;
+      border: 2px dashed #333;
+      background: #111;
+      color: #888;
+      font-family: inherit;
+      font-size: 14px;
+      letter-spacing: 1px;
       cursor: pointer;
-      transition: all 0.3s;
+      text-align: center;
+      margin-bottom: 12px;
+      transition: all 0.2s;
+    }
+    .load-btn:active { border-color: #00ccff; color: #00ccff; }
+
+    .playlist {
+      max-height: 40vh;
+      overflow-y: auto;
+      margin-bottom: 12px;
+      border: 1px solid #222;
+      border-radius: 10px;
+      background: #111;
+    }
+    .track {
+      padding: 10px 14px;
+      border-bottom: 1px solid #1a1a1a;
+      font-size: 13px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: background 0.15s;
+    }
+    .track:last-child { border-bottom: none; }
+    .track:active { background: #1a1a1a; }
+    .track.playing { color: #00ccff; background: rgba(0,204,255,0.05); }
+    .track-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .track-dur { font-size: 10px; color: #555; }
+    .track-playing-icon { font-size: 10px; }
+
+    .now-playing {
+      background: #111;
+      border: 1px solid #222;
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+    .np-title {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .np-time { font-size: 10px; color: #666; margin-bottom: 6px; }
+    .progress-bar {
+      width: 100%;
+      height: 6px;
+      background: #222;
+      border-radius: 3px;
+      overflow: hidden;
+      margin-bottom: 10px;
+      cursor: pointer;
+    }
+    .progress-fill { height: 100%; background: #00ccff; width: 0%; border-radius: 3px; }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+    }
+    .ctrl-btn {
+      width: 44px; height: 44px;
+      border-radius: 50%;
+      border: 1px solid #333;
+      background: #1a1a1a;
+      color: #ccc;
+      font-size: 18px;
+      cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
       -webkit-tap-highlight-color: transparent;
     }
-
-    .stream-btn.ready { border-color: #00ccff; color: #00ccff; background: #0a1520; }
-
-    .stream-btn.live {
-      border-color: #00ff88;
-      color: #00ff88;
-      background: #0a1a10;
-      box-shadow: 0 0 40px rgba(0,255,136,0.3);
-      animation: pulse-live 2s ease-in-out infinite;
+    .ctrl-btn.play {
+      width: 56px; height: 56px;
+      border-color: #00ccff;
+      color: #00ccff;
+      font-size: 22px;
     }
+    .ctrl-btn:active { background: #222; }
 
-    .stream-btn.disabled { opacity: 0.3; cursor: not-allowed; }
-
-    @keyframes pulse-live {
-      0%, 100% { box-shadow: 0 0 20px rgba(0,255,136,0.2); }
-      50% { box-shadow: 0 0 50px rgba(0,255,136,0.4); }
+    .vol-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 10px;
     }
-
-    .btn-label {
-      font-size: 11px; letter-spacing: 2px; color: #555; margin-top: 16px; text-transform: uppercase;
-    }
-    .btn-label.live { color: #00ff88; font-weight: 700; }
-
-    .level-bar-container {
-      width: 100%;
-      max-width: 320px;
-      height: 8px;
-      background: #111;
-      border-radius: 4px;
-      margin-top: 24px;
-      overflow: hidden;
-      border: 1px solid #222;
-    }
-
-    .level-bar {
-      height: 100%;
-      width: 0%;
-      background: linear-gradient(90deg, #00ccff 0%, #00ff88 60%, #ffaa00 80%, #ff3333 95%);
-      border-radius: 4px;
-      transition: width 0.05s linear;
-    }
-
-    .name-input-row {
-      margin-top: 24px;
-      width: 100%;
-      max-width: 320px;
-    }
-
-    .name-input-row label { font-size: 9px; letter-spacing: 2px; color: #555; display: block; margin-bottom: 6px; }
-
-    .name-input-row input {
-      width: 100%;
-      background: #111;
-      border: 1px solid #333;
-      border-radius: 8px;
-      padding: 10px 14px;
-      color: #e0e0e0;
-      font-family: inherit;
-      font-size: 14px;
-      text-align: center;
-      outline: none;
-    }
-
-    .name-input-row input:focus { border-color: #00ccff; }
+    .vol-row label { font-size: 9px; letter-spacing: 1px; color: #555; width: 30px; }
+    .vol-row input[type=range] { flex: 1; accent-color: #00ccff; }
+    .vol-row .val { font-size: 10px; color: #666; width: 35px; text-align: right; }
 
     .info {
-      margin-top: 24px;
+      margin-top: 16px;
       font-size: 10px;
       color: #444;
       text-align: center;
       line-height: 1.6;
-      max-width: 280px;
     }
 
-    .dot { width: 8px; height: 8px; border-radius: 50%; background: #ff3333; display: inline-block; margin-right: 6px; }
-    .dot.connected { background: #00ff88; }
-
-    .refresh-btn {
-      background: none;
-      border: 1px solid #333;
-      border-radius: 6px;
-      color: #888;
-      font-size: 16px;
-      padding: 8px 12px;
-      cursor: pointer;
-      margin-left: 8px;
-    }
+    input[type=file] { display: none; }
   </style>
 </head>
 <body>
 
-  <div class="logo">Subversive Radio</div>
-  <div class="title">DJ INPUT</div>
+  <div class="header">
+    <div class="logo">Subversive Radio</div>
+    <div class="title">DJ INPUT</div>
+  </div>
 
-  <div class="status-box">
-    <div class="status-label">STATUS</div>
-    <div class="status-text offline" id="statusText">
-      <span class="dot" id="connDot"></span>
-      Connecting...
+  <div class="status-bar">
+    <div class="dot" id="connDot"></div>
+    <span class="status-text off" id="statusText">Connecting...</span>
+  </div>
+
+  <label class="load-btn" for="fileInput" id="loadBtn">
+    📂 TAP TO LOAD MUSIC
+  </label>
+  <input type="file" id="fileInput" accept="audio/*" multiple>
+
+  <div class="playlist" id="playlist" style="display:none"></div>
+
+  <div class="now-playing" id="nowPlaying" style="display:none">
+    <div class="np-title" id="npTitle">—</div>
+    <div class="np-time"><span id="npCurrent">0:00</span> / <span id="npDuration">0:00</span></div>
+    <div class="progress-bar" id="progressBar"><div class="progress-fill" id="progressFill"></div></div>
+    <div class="controls">
+      <button class="ctrl-btn" onclick="prevTrack()">⏮</button>
+      <button class="ctrl-btn play" id="playBtn" onclick="togglePlay()">▶</button>
+      <button class="ctrl-btn" onclick="nextTrack()">⏭</button>
+    </div>
+    <div class="vol-row">
+      <label>VOL</label>
+      <input type="range" id="volume" min="0" max="1" step="0.01" value="1" oninput="updateVol()">
+      <span class="val" id="volVal">100%</span>
     </div>
   </div>
 
-  <div class="source-select">
-    <label>AUDIO SOURCE</label>
-    <div style="display:flex;gap:6px">
-      <select id="audioSource">
-        <option value="">-- Select audio source --</option>
-      </select>
-      <button class="refresh-btn" onclick="loadDevices()">↻</button>
-    </div>
-  </div>
-
-  <button class="stream-btn disabled" id="streamBtn" onclick="toggleStream()">
-    🎧
-  </button>
-  <div class="btn-label" id="btnLabel">WAITING FOR HOST</div>
-
-  <div class="level-bar-container">
-    <div class="level-bar" id="levelBar"></div>
-  </div>
-
-  <div class="name-input-row">
-    <label>SOURCE NAME</label>
-    <input type="text" id="djName" placeholder="iPad DJ" maxlength="20" value="iPad DJ">
-  </div>
-
-  <div class="info">
-    Stream audio from this device to the broadcast.<br>
-    Select your audio source (mic, line-in, or virtual output), then tap the button when the host enables input.
+  <div class="info" id="infoText">
+    Load music files from this device.<br>
+    Audio streams directly into the broadcast when the host enables input.
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
-    const socket = io(window.location.origin, {
-      transports: ['polling', 'websocket'],
-      upgrade: true
-    });
-    let audioContext, mediaStream, sourceNode, analyserNode, processorNode;
-    let streaming = false;
+    const socket = io(window.location.origin, { transports: ['polling', 'websocket'], upgrade: true });
+    let audioContext, sourceNode, processorNode, gainNode;
+    let tracks = [];
+    let currentIndex = -1;
+    let audioEl = null;
     let allowed = false;
     let connected = false;
 
-    async function loadDevices() {
-      try {
-        const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        tempStream.getTracks().forEach(t => t.stop());
-
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const inputs = devices.filter(d => d.kind === 'audioinput');
-        const select = document.getElementById('audioSource');
-        const currentVal = select.value;
-
-        select.innerHTML = '<option value="">-- Select audio source --</option>';
-        inputs.forEach((d, i) => {
-          const opt = document.createElement('option');
-          opt.value = d.deviceId;
-          opt.textContent = d.label || `Audio Input ${i + 1}`;
-          select.appendChild(opt);
-        });
-        if (currentVal) select.value = currentVal;
-      } catch (e) {
-        document.getElementById('audioSource').innerHTML = '<option>No audio access — tap ↻</option>';
-      }
-    }
-
-    loadDevices();
-    navigator.mediaDevices.addEventListener('devicechange', loadDevices);
-
+    // Socket events
     socket.on('connect', () => {
       connected = true;
-      document.getElementById('connDot').classList.add('connected');
-      const name = document.getElementById('djName').value.trim() || 'iPad DJ';
-      socket.emit('join-dj-input', { name });
+      document.getElementById('connDot').classList.add('ok');
+      socket.emit('join-dj-input', { name: 'iPad DJ' });
       updateStatus();
     });
 
     socket.on('disconnect', () => {
       connected = false;
-      document.getElementById('connDot').classList.remove('connected');
+      document.getElementById('connDot').classList.remove('ok');
       allowed = false;
-      if (streaming) stopStream();
       updateStatus();
     });
 
     socket.on('dj-input-kicked', () => {
       allowed = false;
-      if (streaming) stopStream();
       connected = false;
+      stopAudio();
       socket.disconnect();
-      document.getElementById('statusText').innerHTML = '<span class="dot"></span>Host closed DJ input';
-      document.getElementById('statusText').className = 'status-text muted';
-      document.getElementById('streamBtn').className = 'stream-btn disabled';
-      document.getElementById('btnLabel').textContent = 'ACCESS CLOSED';
+      document.getElementById('statusText').textContent = 'Host closed DJ input';
+      document.getElementById('statusText').className = 'status-text err';
+      document.getElementById('connDot').classList.remove('ok');
     });
 
     socket.on('dj-input-state', (on) => {
       allowed = on;
-      if (!on && streaming) stopStream();
       updateStatus();
     });
 
     function updateStatus() {
       const el = document.getElementById('statusText');
-      const btn = document.getElementById('streamBtn');
-      const label = document.getElementById('btnLabel');
-
       el.className = 'status-text';
-      btn.className = 'stream-btn';
-
       if (!connected) {
-        el.innerHTML = '<span class="dot" id="connDot"></span>Disconnected';
-        el.classList.add('offline');
-        btn.classList.add('disabled');
-        label.textContent = 'NO CONNECTION';
-        label.className = 'btn-label';
-      } else if (streaming) {
-        el.innerHTML = '<span class="dot connected" id="connDot"></span>STREAMING AUDIO';
-        el.classList.add('live');
-        btn.classList.add('live');
-        label.textContent = 'TAP TO STOP';
-        label.className = 'btn-label live';
+        el.textContent = 'Disconnected';
+        el.classList.add('off');
       } else if (allowed) {
-        el.innerHTML = '<span class="dot connected" id="connDot"></span>Host enabled input';
+        el.textContent = 'ENABLED — audio streaming to broadcast';
         el.classList.add('live');
-        btn.classList.add('ready');
-        label.textContent = 'TAP TO STREAM';
-        label.className = 'btn-label';
       } else {
-        el.innerHTML = '<span class="dot connected" id="connDot"></span>Waiting for host...';
+        el.textContent = 'Connected — waiting for host to enable';
         el.classList.add('waiting');
-        btn.classList.add('disabled');
-        label.textContent = 'WAITING FOR HOST';
-        label.className = 'btn-label';
       }
     }
 
-    async function toggleStream() {
-      if (!allowed) return;
-      if (streaming) {
-        stopStream();
+    // File loading
+    document.getElementById('fileInput').addEventListener('change', (e) => {
+      const files = Array.from(e.target.files);
+      if (!files.length) return;
+
+      files.forEach(f => {
+        tracks.push({ name: f.name.replace(/\.[^.]+$/, ''), url: URL.createObjectURL(f), file: f });
+      });
+      renderPlaylist();
+      document.getElementById('playlist').style.display = 'block';
+      document.getElementById('nowPlaying').style.display = 'block';
+      if (currentIndex < 0) loadTrack(0);
+    });
+
+    function renderPlaylist() {
+      const el = document.getElementById('playlist');
+      el.innerHTML = tracks.map((t, i) =>
+        `<div class="track ${i === currentIndex ? 'playing' : ''}" onclick="loadTrack(${i}); playTrack();">
+          <span class="track-playing-icon">${i === currentIndex ? '▶' : ''}</span>
+          <span class="track-name">${t.name}</span>
+        </div>`
+      ).join('');
+    }
+
+    function loadTrack(i) {
+      if (i < 0 || i >= tracks.length) return;
+      currentIndex = i;
+
+      if (audioEl) {
+        audioEl.pause();
+        audioEl.src = '';
+      }
+
+      audioEl = new Audio(tracks[i].url);
+      audioEl.setAttribute('playsinline', '');
+      audioEl.setAttribute('webkit-playsinline', '');
+      audioEl.volume = parseFloat(document.getElementById('volume').value);
+
+      audioEl.onended = () => nextTrack();
+      audioEl.ontimeupdate = updateProgress;
+      audioEl.onloadedmetadata = () => {
+        document.getElementById('npDuration').textContent = fmtTime(audioEl.duration);
+      };
+
+      document.getElementById('npTitle').textContent = tracks[i].name;
+      document.getElementById('playBtn').textContent = '▶';
+      renderPlaylist();
+
+      // Set up audio capture for streaming
+      setupCapture();
+    }
+
+    function setupCapture() {
+      if (!audioEl) return;
+
+      // Create fresh context each time for iOS compatibility
+      if (audioContext) { try { audioContext.close(); } catch(e) {} }
+
+      audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 44100 });
+      audioContext.resume();
+
+      sourceNode = audioContext.createMediaElementSource(audioEl);
+      gainNode = audioContext.createGain();
+      gainNode.gain.value = 1.0;
+
+      const bufferSize = 4096;
+      processorNode = audioContext.createScriptProcessor(bufferSize, 1, 1);
+
+      sourceNode.connect(gainNode);
+      gainNode.connect(processorNode);
+      gainNode.connect(audioContext.destination); // play locally on iPad too
+
+      const silentDest = audioContext.createMediaStreamDestination();
+      processorNode.connect(silentDest);
+
+      processorNode.onaudioprocess = (e) => {
+        if (!allowed || !audioEl || audioEl.paused) return;
+        const inputData = e.inputBuffer.getChannelData(0);
+        const pcmData = new Int16Array(inputData.length);
+        for (let i = 0; i < inputData.length; i++) {
+          const s = Math.max(-1, Math.min(1, inputData[i]));
+          pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        }
+        socket.emit('audio-stream', pcmData.buffer);
+      };
+    }
+
+    function playTrack() {
+      if (!audioEl) return;
+      if (audioContext && audioContext.state === 'suspended') audioContext.resume();
+      audioEl.play().catch(() => {});
+      document.getElementById('playBtn').textContent = '⏸';
+    }
+
+    function togglePlay() {
+      if (!audioEl) return;
+      if (audioEl.paused) {
+        playTrack();
       } else {
-        await startStream();
+        audioEl.pause();
+        document.getElementById('playBtn').textContent = '▶';
       }
-      updateStatus();
     }
 
-    async function startStream() {
-      const deviceId = document.getElementById('audioSource').value;
-      if (!deviceId) {
-        alert('Select an audio source first');
+    function nextTrack() {
+      if (tracks.length === 0) return;
+      const next = (currentIndex + 1) % tracks.length;
+      loadTrack(next);
+      playTrack();
+    }
+
+    function prevTrack() {
+      if (tracks.length === 0) return;
+      if (audioEl && audioEl.currentTime > 3) {
+        audioEl.currentTime = 0;
         return;
       }
-
-      try {
-        audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 44100 });
-        await audioContext.resume();
-
-        mediaStream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            deviceId: { exact: deviceId },
-            echoCancellation: false,
-            noiseSuppression: false,
-            autoGainControl: false
-          }
-        });
-
-        sourceNode = audioContext.createMediaStreamSource(mediaStream);
-        analyserNode = audioContext.createAnalyser();
-        analyserNode.fftSize = 256;
-
-        const bufferSize = 4096;
-        processorNode = audioContext.createScriptProcessor(bufferSize, 1, 1);
-
-        sourceNode.connect(analyserNode);
-        analyserNode.connect(processorNode);
-        const silentDest = audioContext.createMediaStreamDestination();
-        processorNode.connect(silentDest);
-
-        processorNode.onaudioprocess = (e) => {
-          if (!streaming || !allowed) return;
-          const inputData = e.inputBuffer.getChannelData(0);
-          const pcmData = new Int16Array(inputData.length);
-          for (let i = 0; i < inputData.length; i++) {
-            const s = Math.max(-1, Math.min(1, inputData[i]));
-            pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-          }
-          socket.emit('audio-stream', pcmData.buffer);
-        };
-
-        streaming = true;
-        drawLevel();
-      } catch (err) {
-        alert('Audio access denied: ' + err.message);
-      }
+      const prev = (currentIndex - 1 + tracks.length) % tracks.length;
+      loadTrack(prev);
+      playTrack();
     }
 
-    function stopStream() {
-      streaming = false;
-      if (mediaStream) {
-        mediaStream.getTracks().forEach(t => t.stop());
-        mediaStream = null;
-      }
-      if (audioContext) {
-        audioContext.close().catch(() => {});
-        audioContext = null;
-      }
-      sourceNode = null;
-      analyserNode = null;
-      processorNode = null;
-      document.getElementById('levelBar').style.width = '0%';
+    function stopAudio() {
+      if (audioEl) { audioEl.pause(); audioEl.src = ''; }
+      if (audioContext) { try { audioContext.close(); } catch(e) {} audioContext = null; }
     }
 
-    function drawLevel() {
-      if (!analyserNode || !streaming) return;
-      const data = new Uint8Array(analyserNode.frequencyBinCount);
-      analyserNode.getByteFrequencyData(data);
-      let sum = 0;
-      for (let i = 0; i < data.length; i++) sum += data[i];
-      const avg = sum / data.length;
-      const pct = Math.min(100, (avg / 128) * 100);
-      document.getElementById('levelBar').style.width = pct + '%';
-      requestAnimationFrame(drawLevel);
+    function updateProgress() {
+      if (!audioEl || !audioEl.duration) return;
+      const pct = (audioEl.currentTime / audioEl.duration) * 100;
+      document.getElementById('progressFill').style.width = pct + '%';
+      document.getElementById('npCurrent').textContent = fmtTime(audioEl.currentTime);
+    }
+
+    document.getElementById('progressBar').addEventListener('click', (e) => {
+      if (!audioEl || !audioEl.duration) return;
+      const rect = e.currentTarget.getBoundingClientRect();
+      const pct = (e.clientX - rect.left) / rect.width;
+      audioEl.currentTime = pct * audioEl.duration;
+    });
+
+    function updateVol() {
+      const v = parseFloat(document.getElementById('volume').value);
+      document.getElementById('volVal').textContent = Math.round(v * 100) + '%';
+      if (audioEl) audioEl.volume = v;
+    }
+
+    function fmtTime(s) {
+      if (!s || !isFinite(s)) return '0:00';
+      const m = Math.floor(s / 60);
+      const sec = Math.floor(s % 60);
+      return m + ':' + (sec < 10 ? '0' : '') + sec;
     }
 
     // Keep screen awake
     let wakeLock = null;
     async function requestWakeLock() {
-      try {
-        if ('wakeLock' in navigator) {
-          wakeLock = await navigator.wakeLock.request('screen');
-        }
-      } catch (e) {}
+      try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch(e) {}
     }
     requestWakeLock();
     document.addEventListener('visibilitychange', () => {
