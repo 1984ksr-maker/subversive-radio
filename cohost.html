@@ -219,7 +219,14 @@
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
-    const socket = io(window.location.origin);
+    const socket = io(window.location.origin, {
+      transports: ['polling', 'websocket'],
+      upgrade: true,
+      reconnection: true,
+      reconnectionDelay: 500,
+      reconnectionDelayMax: 3000,
+      reconnectionAttempts: Infinity
+    });
     let audioContext, mediaStream, sourceNode, analyserNode, processorNode;
     let micActive = false;
     let micAllowed = false;
@@ -336,6 +343,7 @@
         };
 
         micActive = true;
+        startKeepAlive();
         drawLevel();
       } catch (err) {
         alert('Mic access denied: ' + err.message);
@@ -344,6 +352,7 @@
 
     function stopMic() {
       micActive = false;
+      stopKeepAlive();
       if (mediaStream) {
         mediaStream.getTracks().forEach(t => t.stop());
         mediaStream = null;
@@ -370,6 +379,24 @@
       requestAnimationFrame(drawLevel);
     }
 
+    // Keep AudioContext alive — prevent browser from suspending it
+    let keepAliveInterval = null;
+    function startKeepAlive() {
+      if (keepAliveInterval) return;
+      keepAliveInterval = setInterval(() => {
+        if (audioContext && audioContext.state === 'suspended') audioContext.resume();
+      }, 3000);
+    }
+    function stopKeepAlive() {
+      if (keepAliveInterval) { clearInterval(keepAliveInterval); keepAliveInterval = null; }
+    }
+
+    // Reconnect mic after socket reconnects
+    socket.on('reconnect', () => {
+      const name = document.getElementById('cohostName').value.trim() || 'Co-Host';
+      socket.emit('join-cohost', { name });
+    });
+
     // Keep screen awake
     let wakeLock = null;
     async function requestWakeLock() {
@@ -381,7 +408,10 @@
     }
     requestWakeLock();
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') requestWakeLock();
+      if (document.visibilityState === 'visible') {
+        requestWakeLock();
+        if (audioContext && audioContext.state === 'suspended') audioContext.resume();
+      }
     });
   </script>
 </body>
