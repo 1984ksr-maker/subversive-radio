@@ -1971,7 +1971,8 @@
           const inputData = e.inputBuffer.getChannelData(0);
 
           // Auto-duck: lower ext/music volume when mic detects voice
-          if (document.getElementById('autoDuck').checked && micAnalyserNode && (extConnected || musicGainNode)) {
+          const autoDuckEnabled = document.getElementById('autoDuck').checked && !micMuted && micAnalyserNode && (extConnected || musicGainNode);
+          if (autoDuckEnabled) {
             if (!micAnalyserBuf) micAnalyserBuf = new Float32Array(micAnalyserNode.fftSize);
             micAnalyserNode.getFloatTimeDomainData(micAnalyserBuf);
             let micRms = 0;
@@ -2689,6 +2690,25 @@
         if (gainNode) gainNode.gain.value = 0;
         btn.textContent = '🔇 MIC OFF';
         btn.classList.add('muted');
+
+        // Restore auto-ducked volumes immediately
+        if (autoDuckActive && audioContext) {
+          autoDuckActive = false;
+          autoDuckRelease = 0;
+          const now = audioContext.currentTime;
+          if (extInputGain) {
+            const extVol = parseFloat(document.getElementById('extInputVolume').value);
+            extInputGain.gain.cancelScheduledValues(now);
+            extInputGain.gain.setValueAtTime(extInputGain.gain.value, now);
+            extInputGain.gain.linearRampToValueAtTime(extVol, now + 0.2);
+          }
+          if (musicGainNode) {
+            const musVol = parseFloat(document.getElementById('musicVolume').value);
+            musicGainNode.gain.cancelScheduledValues(now);
+            musicGainNode.gain.setValueAtTime(musicGainNode.gain.value, now);
+            musicGainNode.gain.linearRampToValueAtTime(musVol, now + 0.2);
+          }
+        }
       } else {
         // Unmute: restore mic gain
         const db = parseFloat(document.getElementById('inputGain').value);
