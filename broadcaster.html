@@ -1838,9 +1838,9 @@
             mediaStream = await navigator.mediaDevices.getUserMedia({
               audio: {
                 deviceId: { exact: deviceId },
-                echoCancellation: !isExternal,
-                noiseSuppression: !isExternal,
-                autoGainControl: !isExternal
+                echoCancellation: false,
+                noiseSuppression: false,
+                autoGainControl: false
               }
             });
             sourceNode = audioContext.createMediaStreamSource(mediaStream);
@@ -1852,7 +1852,7 @@
         } else if (useMic) {
           try {
             mediaStream = await navigator.mediaDevices.getUserMedia({
-              audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+              audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
             });
             sourceNode = audioContext.createMediaStreamSource(mediaStream);
           } catch (micErr) {
