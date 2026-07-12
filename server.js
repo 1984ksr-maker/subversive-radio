@@ -349,7 +349,7 @@ app.get('/health', (req, res) => {
 // API
 app.get('/api/station', (req, res) => {
   // On cloud, use the request host as the broadcast URL
-  const broadcastUrl = tunnelUrl || (IS_CLOUD ? `${req.protocol}://${req.get('host')}` : null);
+  const broadcastUrl = tunnelUrl || `${req.protocol}://${req.get('host')}`;
   res.json({ ...stationInfo, tunnelUrl: broadcastUrl, listenerCount: getListenerCount() });
 });
 
@@ -614,7 +614,8 @@ io.on('connection', (socket) => {
     broadcasterSocketId = socket.id;
     console.log('🎙️  Broadcaster connected');
     socket.emit('listener-count', getListenerCount());
-    if (tunnelUrl) socket.emit('tunnel-url', tunnelUrl);
+    const url = tunnelUrl || `http://${socket.handshake.headers.host}`;
+    socket.emit('tunnel-url', url);
   });
 
   // CO-HOST — remote mic controlled by host
