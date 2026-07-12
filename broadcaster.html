@@ -1380,6 +1380,13 @@
                   <span id="cohostConnectedName" style="font-size:11px;flex:1">—</span>
                   <button id="cohostMicBtn" onclick="toggleCohostMic()" style="padding:6px 14px;border-radius:6px;border:1px solid #333;background:var(--surface);color:var(--text-dim);font-family:inherit;font-size:9px;letter-spacing:1px;cursor:pointer;transition:all 0.2s">ALLOW MIC</button>
                 </div>
+                <div id="cohostLinkSection" style="display:none;padding:4px 0">
+                  <div style="display:flex;gap:6px">
+                    <input type="text" id="cohostLink" readonly style="flex:1;background:#111;border:1px solid #333;border-radius:6px;padding:6px 10px;color:var(--text-dim);font-family:inherit;font-size:10px">
+                    <button onclick="navigator.clipboard.writeText(document.getElementById('cohostLink').value).then(()=>{this.textContent='✓';setTimeout(()=>{this.textContent='COPY'},1500)})" style="padding:6px 10px;border-radius:6px;border:1px solid var(--green);background:var(--surface);color:var(--green);font-family:inherit;font-size:9px;cursor:pointer">COPY</button>
+                  </div>
+                  <div style="font-size:8px;color:#555;margin-top:4px">Send this link to your co-host</div>
+                </div>
               </div>
             </div>
           </div>
