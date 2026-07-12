@@ -15,27 +15,18 @@
       min-height: 100vh;
       min-height: 100dvh;
       padding: 16px;
+      padding-bottom: 40px;
       -webkit-user-select: none;
       user-select: none;
     }
 
-    .header {
-      text-align: center;
-      margin-bottom: 20px;
-    }
+    .header { text-align: center; margin-bottom: 20px; }
     .logo { font-size: 10px; letter-spacing: 4px; color: #555; text-transform: uppercase; }
     .title { font-size: 18px; font-weight: 700; letter-spacing: 2px; color: #00ccff; margin-top: 4px; }
 
     .status-bar {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      padding: 10px 16px;
-      background: #111;
-      border: 1px solid #222;
-      border-radius: 10px;
-      margin-bottom: 16px;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 10px 16px; background: #111; border: 1px solid #222; border-radius: 10px; margin-bottom: 16px;
     }
     .dot { width: 8px; height: 8px; border-radius: 50%; background: #ff3333; flex-shrink: 0; }
     .dot.ok { background: #00ff88; }
@@ -45,120 +36,90 @@
     .status-text.off { color: #555; }
     .status-text.err { color: #ff3333; }
 
+    .section-label {
+      font-size: 9px; letter-spacing: 2px; color: #555; text-transform: uppercase;
+      margin-bottom: 8px; margin-top: 16px;
+    }
+
     .load-btn {
-      width: 100%;
-      padding: 14px;
-      border-radius: 10px;
-      border: 2px dashed #333;
-      background: #111;
-      color: #888;
-      font-family: inherit;
-      font-size: 14px;
-      letter-spacing: 1px;
-      cursor: pointer;
-      text-align: center;
-      margin-bottom: 12px;
-      transition: all 0.2s;
+      width: 100%; padding: 14px; border-radius: 10px; border: 2px dashed #333;
+      background: #111; color: #888; font-family: inherit; font-size: 14px;
+      letter-spacing: 1px; cursor: pointer; text-align: center; margin-bottom: 8px; transition: all 0.2s;
     }
     .load-btn:active { border-color: #00ccff; color: #00ccff; }
 
+    .url-section {
+      background: #111; border: 1px solid #222; border-radius: 10px;
+      padding: 12px; margin-bottom: 12px;
+    }
+    .url-row { display: flex; gap: 8px; margin-bottom: 8px; }
+    .url-input {
+      flex: 1; background: #0a0a0a; border: 1px solid #333; border-radius: 8px;
+      padding: 10px 12px; color: #e0e0e0; font-family: inherit; font-size: 13px; outline: none;
+    }
+    .url-input:focus { border-color: #00ccff; }
+    .url-input::placeholder { color: #444; }
+    .url-play-btn {
+      padding: 10px 16px; border-radius: 8px; border: 1px solid #00ccff;
+      background: rgba(0,204,255,0.1); color: #00ccff; font-family: inherit;
+      font-size: 12px; font-weight: 700; letter-spacing: 1px; cursor: pointer; transition: all 0.2s;
+    }
+    .url-play-btn:active { background: #00ccff; color: #000; }
+    .url-hint { font-size: 9px; color: #444; line-height: 1.5; }
+
     .playlist {
-      max-height: 40vh;
-      overflow-y: auto;
-      margin-bottom: 12px;
-      border: 1px solid #222;
-      border-radius: 10px;
-      background: #111;
+      max-height: 35vh; overflow-y: auto; margin-bottom: 12px;
+      border: 1px solid #222; border-radius: 10px; background: #111;
     }
     .track {
-      padding: 10px 14px;
-      border-bottom: 1px solid #1a1a1a;
-      font-size: 13px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      transition: background 0.15s;
+      padding: 10px 14px; border-bottom: 1px solid #1a1a1a; font-size: 13px;
+      cursor: pointer; display: flex; align-items: center; gap: 8px; transition: background 0.15s;
     }
     .track:last-child { border-bottom: none; }
     .track:active { background: #1a1a1a; }
     .track.playing { color: #00ccff; background: rgba(0,204,255,0.05); }
     .track-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .track-dur { font-size: 10px; color: #555; }
-    .track-playing-icon { font-size: 10px; }
+    .track-icon { font-size: 10px; width: 14px; text-align: center; }
+    .track-remove {
+      font-size: 14px; color: #444; cursor: pointer; padding: 2px 6px;
+      border: none; background: none; -webkit-tap-highlight-color: transparent;
+    }
+    .track-remove:active { color: #ff3333; }
 
     .now-playing {
-      background: #111;
-      border: 1px solid #222;
-      border-radius: 10px;
-      padding: 12px;
-      margin-bottom: 12px;
+      background: #111; border: 1px solid #222; border-radius: 10px;
+      padding: 12px; margin-bottom: 12px;
     }
     .np-title {
-      font-size: 13px;
-      font-weight: 600;
-      margin-bottom: 8px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      font-size: 13px; font-weight: 600; margin-bottom: 8px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
     .np-time { font-size: 10px; color: #666; margin-bottom: 6px; }
     .progress-bar {
-      width: 100%;
-      height: 6px;
-      background: #222;
-      border-radius: 3px;
-      overflow: hidden;
-      margin-bottom: 10px;
-      cursor: pointer;
+      width: 100%; height: 6px; background: #222; border-radius: 3px;
+      overflow: hidden; margin-bottom: 10px; cursor: pointer;
     }
-    .progress-fill { height: 100%; background: #00ccff; width: 0%; border-radius: 3px; }
+    .progress-fill { height: 100%; background: #00ccff; width: 0%; border-radius: 3px; transition: width 0.2s linear; }
 
-    .controls {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 16px;
-    }
+    .controls { display: flex; align-items: center; justify-content: center; gap: 16px; }
     .ctrl-btn {
-      width: 44px; height: 44px;
-      border-radius: 50%;
-      border: 1px solid #333;
-      background: #1a1a1a;
-      color: #ccc;
-      font-size: 18px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      width: 44px; height: 44px; border-radius: 50%; border: 1px solid #333;
+      background: #1a1a1a; color: #ccc; font-size: 18px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
       -webkit-tap-highlight-color: transparent;
     }
     .ctrl-btn.play {
-      width: 56px; height: 56px;
-      border-color: #00ccff;
-      color: #00ccff;
-      font-size: 22px;
+      width: 56px; height: 56px; border-color: #00ccff; color: #00ccff; font-size: 22px;
     }
     .ctrl-btn:active { background: #222; }
 
-    .vol-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-top: 10px;
-    }
+    .vol-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
     .vol-row label { font-size: 9px; letter-spacing: 1px; color: #555; width: 30px; }
     .vol-row input[type=range] { flex: 1; accent-color: #00ccff; }
     .vol-row .val { font-size: 10px; color: #666; width: 35px; text-align: right; }
 
-    .info {
-      margin-top: 16px;
-      font-size: 10px;
-      color: #444;
-      text-align: center;
-      line-height: 1.6;
-    }
-
+    .info { margin-top: 16px; font-size: 10px; color: #444; text-align: center; line-height: 1.6; }
     input[type=file] { display: none; }
   </style>
 </head>
@@ -174,13 +135,29 @@
     <span class="status-text off" id="statusText">Connecting...</span>
   </div>
 
+  <!-- URL INPUT -->
+  <div class="section-label">PLAY FROM LINK</div>
+  <div class="url-section">
+    <div class="url-row">
+      <input type="text" class="url-input" id="urlInput" placeholder="Paste audio URL..." autocomplete="off" autocorrect="off">
+      <button class="url-play-btn" onclick="loadUrl()">PLAY</button>
+    </div>
+    <div class="url-hint">
+      Direct audio links (.mp3, .ogg, .wav), radio streams, or any playable URL.
+    </div>
+  </div>
+
+  <!-- FILE INPUT -->
+  <div class="section-label">LOAD FROM DEVICE</div>
   <label class="load-btn" for="fileInput" id="loadBtn">
     📂 TAP TO LOAD MUSIC
   </label>
   <input type="file" id="fileInput" accept="audio/*" multiple>
 
+  <!-- PLAYLIST -->
   <div class="playlist" id="playlist" style="display:none"></div>
 
+  <!-- NOW PLAYING -->
   <div class="now-playing" id="nowPlaying" style="display:none">
     <div class="np-title" id="npTitle">—</div>
     <div class="np-time"><span id="npCurrent">0:00</span> / <span id="npDuration">0:00</span></div>
@@ -198,13 +175,20 @@
   </div>
 
   <div class="info" id="infoText">
-    Load music files from this device.<br>
-    Audio streams directly into the broadcast when the host enables input.
+    Load music from your device or paste a link.<br>
+    Audio streams into the broadcast when the host enables input.
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
-    const socket = io(window.location.origin, { transports: ['polling', 'websocket'], upgrade: true });
+    const socket = io(window.location.origin, {
+      transports: ['polling', 'websocket'],
+      upgrade: true,
+      reconnection: true,
+      reconnectionDelay: 500,
+      reconnectionDelayMax: 3000,
+      reconnectionAttempts: Infinity
+    });
     let audioContext, sourceNode, processorNode, gainNode;
     let tracks = [];
     let currentIndex = -1;
@@ -225,6 +209,10 @@
       document.getElementById('connDot').classList.remove('ok');
       allowed = false;
       updateStatus();
+    });
+
+    socket.on('reconnect', () => {
+      socket.emit('join-dj-input', { name: 'iPad DJ' });
     });
 
     socket.on('dj-input-kicked', () => {
@@ -257,7 +245,34 @@
       }
     }
 
-    // File loading
+    // ========== URL LOADING ==========
+    function loadUrl() {
+      let url = document.getElementById('urlInput').value.trim();
+      if (!url) return;
+
+      // Add to playlist
+      let name = 'Stream';
+      try {
+        const parsed = new URL(url);
+        name = decodeURIComponent(parsed.pathname.split('/').pop() || parsed.hostname);
+        if (name.length > 40) name = name.slice(0, 40) + '...';
+      } catch(e) {}
+
+      tracks.push({ name, url, isUrl: true });
+      renderPlaylist();
+      document.getElementById('playlist').style.display = 'block';
+      document.getElementById('nowPlaying').style.display = 'block';
+      loadTrack(tracks.length - 1);
+      playTrack();
+      document.getElementById('urlInput').value = '';
+    }
+
+    // Enter key in URL input
+    document.getElementById('urlInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); loadUrl(); }
+    });
+
+    // ========== FILE LOADING ==========
     document.getElementById('fileInput').addEventListener('change', (e) => {
       const files = Array.from(e.target.files);
       if (!files.length) return;
@@ -271,16 +286,45 @@
       if (currentIndex < 0) loadTrack(0);
     });
 
+    // ========== PLAYLIST ==========
     function renderPlaylist() {
       const el = document.getElementById('playlist');
       el.innerHTML = tracks.map((t, i) =>
         `<div class="track ${i === currentIndex ? 'playing' : ''}" onclick="loadTrack(${i}); playTrack();">
-          <span class="track-playing-icon">${i === currentIndex ? '▶' : ''}</span>
-          <span class="track-name">${t.name}</span>
+          <span class="track-icon">${i === currentIndex ? '▶' : (t.isUrl ? '🔗' : '🎵')}</span>
+          <span class="track-name">${escHtml(t.name)}</span>
+          <button class="track-remove" onclick="event.stopPropagation(); removeTrack(${i})">✕</button>
         </div>`
       ).join('');
     }
 
+    function escHtml(s) {
+      const d = document.createElement('div');
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    function removeTrack(i) {
+      if (i === currentIndex) {
+        stopAudio();
+        currentIndex = -1;
+        document.getElementById('npTitle').textContent = '—';
+        document.getElementById('playBtn').textContent = '▶';
+        document.getElementById('progressFill').style.width = '0%';
+        document.getElementById('npCurrent').textContent = '0:00';
+        document.getElementById('npDuration').textContent = '0:00';
+      } else if (i < currentIndex) {
+        currentIndex--;
+      }
+      tracks.splice(i, 1);
+      if (tracks.length === 0) {
+        document.getElementById('playlist').style.display = 'none';
+        document.getElementById('nowPlaying').style.display = 'none';
+      }
+      renderPlaylist();
+    }
+
+    // ========== PLAYER ==========
     function loadTrack(i) {
       if (i < 0 || i >= tracks.length) return;
       currentIndex = i;
@@ -290,7 +334,9 @@
         audioEl.src = '';
       }
 
-      audioEl = new Audio(tracks[i].url);
+      audioEl = new Audio();
+      audioEl.crossOrigin = 'anonymous';
+      audioEl.src = tracks[i].url;
       audioEl.setAttribute('playsinline', '');
       audioEl.setAttribute('webkit-playsinline', '');
       audioEl.volume = parseFloat(document.getElementById('volume').value);
@@ -300,25 +346,31 @@
       audioEl.onloadedmetadata = () => {
         document.getElementById('npDuration').textContent = fmtTime(audioEl.duration);
       };
+      audioEl.onerror = () => {
+        document.getElementById('npTitle').textContent = '⚠ Cannot play — try a direct audio link';
+      };
 
       document.getElementById('npTitle').textContent = tracks[i].name;
       document.getElementById('playBtn').textContent = '▶';
       renderPlaylist();
 
-      // Set up audio capture for streaming
       setupCapture();
     }
 
     function setupCapture() {
       if (!audioEl) return;
 
-      // Create fresh context each time for iOS compatibility
       if (audioContext) { try { audioContext.close(); } catch(e) {} }
 
       audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 44100 });
       audioContext.resume();
 
-      sourceNode = audioContext.createMediaElementSource(audioEl);
+      try {
+        sourceNode = audioContext.createMediaElementSource(audioEl);
+      } catch(e) {
+        // Already connected to another context — just play without capture
+        return;
+      }
       gainNode = audioContext.createGain();
       gainNode.gain.value = 1.0;
 
@@ -327,7 +379,7 @@
 
       sourceNode.connect(gainNode);
       gainNode.connect(processorNode);
-      gainNode.connect(audioContext.destination); // play locally on iPad too
+      gainNode.connect(audioContext.destination);
 
       const silentDest = audioContext.createMediaStreamDestination();
       processorNode.connect(silentDest);
@@ -380,12 +432,12 @@
     }
 
     function stopAudio() {
-      if (audioEl) { audioEl.pause(); audioEl.src = ''; }
+      if (audioEl) { audioEl.pause(); audioEl.src = ''; audioEl = null; }
       if (audioContext) { try { audioContext.close(); } catch(e) {} audioContext = null; }
     }
 
     function updateProgress() {
-      if (!audioEl || !audioEl.duration) return;
+      if (!audioEl || !audioEl.duration || !isFinite(audioEl.duration)) return;
       const pct = (audioEl.currentTime / audioEl.duration) * 100;
       document.getElementById('progressFill').style.width = pct + '%';
       document.getElementById('npCurrent').textContent = fmtTime(audioEl.currentTime);
@@ -411,12 +463,17 @@
       return m + ':' + (sec < 10 ? '0' : '') + sec;
     }
 
-    // Keep screen awake
+    // Keep alive
     let wakeLock = null;
     async function requestWakeLock() {
       try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch(e) {}
     }
     requestWakeLock();
+
+    setInterval(() => {
+      if (audioContext && audioContext.state === 'suspended') audioContext.resume();
+    }, 3000);
+
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
         requestWakeLock();
