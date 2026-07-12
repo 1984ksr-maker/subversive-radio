@@ -428,7 +428,7 @@ let mp3EncoderRate = 0;
 
 function getMp3Encoder() {
   if (!Mp3Encoder) return null;
-  const rate = stationInfo.sampleRate || 44100;
+  const rate = stationInfo.sampleRate || 22050;
   if (!mp3Encoder || mp3EncoderRate !== rate) {
     mp3Encoder = new Mp3Encoder(1, rate, 128); // mono, 128 kbps
     mp3EncoderRate = rate;
@@ -729,7 +729,7 @@ io.on('connection', (socket) => {
     if (info) {
       stationInfo.name = info.name || stationInfo.name;
       stationInfo.tagline = info.tagline || stationInfo.tagline;
-      stationInfo.sampleRate = info.sampleRate || 44100;
+      stationInfo.sampleRate = info.sampleRate || 22050;
     }
     io.to('listeners').emit('station-live', stationInfo);
     console.log(`🔴 LIVE: ${stationInfo.name} (${getListenerCount()} listeners)`);

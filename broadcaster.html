@@ -1425,9 +1425,9 @@
               <div class="quality-item">
                 <label>Sample Rate</label>
                 <select id="sampleRate" onchange="updateQuality()">
-                  <option value="22050">22050 Hz</option>
-                  <option value="44100" selected>44100 Hz</option>
-                  <option value="48000">48000 Hz</option>
+                  <option value="22050" selected>22050 Hz (low bandwidth)</option>
+                  <option value="44100">44100 Hz (high quality)</option>
+                  <option value="48000">48000 Hz (studio)</option>
                 </select>
               </div>
               <div class="quality-item">
@@ -1557,7 +1557,7 @@
     let gateThreshold = -50;
 
     let peakL = 0, peakR = 0, peakOut = 0;
-    let currentSampleRate = 44100;
+    let currentSampleRate = 22050;
     let currentBitDepth = 16;
 
     // Auto-duck state

@@ -362,7 +362,7 @@
 
       if (audioContext) { try { audioContext.close(); } catch(e) {} }
 
-      audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 44100 });
+      audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 22050 });
       audioContext.resume();
 
       try {
