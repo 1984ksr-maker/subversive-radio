@@ -1977,18 +1977,37 @@
           if (!isLive) return;
           const inputData = e.inputBuffer.getChannelData(0);
 
-          // Auto-duck: lower ext/music volume when mic detects voice
-          const autoDuckEnabled = document.getElementById('autoDuck').checked && !micMuted && micAnalyserNode && (extConnected || musicGainNode);
+          // Auto-duck: lower ext/music volume when ANY mic detects voice (host or co-host)
+          const autoDuckCheckbox = document.getElementById('autoDuck').checked;
+          const hasAudioSource = extConnected || musicGainNode;
+          const autoDuckEnabled = autoDuckCheckbox && hasAudioSource;
           if (autoDuckEnabled) {
-            if (!micAnalyserBuf) micAnalyserBuf = new Float32Array(micAnalyserNode.fftSize);
-            micAnalyserNode.getFloatTimeDomainData(micAnalyserBuf);
-            let micRms = 0;
-            for (let i = 0; i < micAnalyserBuf.length; i++) micRms += micAnalyserBuf[i] * micAnalyserBuf[i];
-            micRms = Math.sqrt(micRms / micAnalyserBuf.length);
-            const micDb = 20 * Math.log10(micRms + 1e-10);
+            let voiceDetected = false;
+
+            // Check host mic
+            if (!micMuted && micAnalyserNode) {
+              if (!micAnalyserBuf) micAnalyserBuf = new Float32Array(micAnalyserNode.fftSize);
+              micAnalyserNode.getFloatTimeDomainData(micAnalyserBuf);
+              let micRms = 0;
+              for (let i = 0; i < micAnalyserBuf.length; i++) micRms += micAnalyserBuf[i] * micAnalyserBuf[i];
+              micRms = Math.sqrt(micRms / micAnalyserBuf.length);
+              const micDb = 20 * Math.log10(micRms + 1e-10);
+              if (micDb > -35) voiceDetected = true;
+            }
+
+            // Check co-host audio
+            if (!voiceDetected && cohostActive && cohostPcmQueue.length > 0) {
+              const lastChunk = cohostPcmQueue[cohostPcmQueue.length - 1];
+              let cohostRms = 0;
+              for (let i = 0; i < lastChunk.length; i++) cohostRms += lastChunk[i] * lastChunk[i];
+              cohostRms = Math.sqrt(cohostRms / lastChunk.length);
+              const cohostDb = 20 * Math.log10(cohostRms + 1e-10);
+              if (cohostDb > -35) voiceDetected = true;
+            }
+
             const duckLevel = parseFloat(document.getElementById('autoDuckLevel').value);
 
-            if (micDb > -35) {
+            if (voiceDetected) {
               // Voice detected — duck
               if (!autoDuckActive) {
                 autoDuckActive = true;
