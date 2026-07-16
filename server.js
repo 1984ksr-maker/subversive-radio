@@ -158,6 +158,11 @@ let stationInfo = {
 
 let transmissions = [];
 
+// Serve lamejs for client-side MP3 encoding
+app.get('/lamejs.js', (req, res) => {
+  res.sendFile(path.join(__dirname, 'node_modules/@breezystack/lamejs/dist/lamejs.iife.js'));
+});
+
 // Serve static files with caching
 app.use(express.static(path.join(__dirname, 'public'), {
   maxAge: '1h',

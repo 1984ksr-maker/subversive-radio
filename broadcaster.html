@@ -978,20 +978,28 @@
             </div>
             <div class="meters-area">
               <div class="meter-row">
-                <span class="meter-label">L</span>
+                <span class="meter-label">MIC</span>
                 <div class="vu-meter">
-                  <div class="vu-meter-fill" id="vuL"></div>
-                  <div class="vu-meter-peak" id="vuPeakL" style="left:0%"></div>
+                  <div class="vu-meter-fill" id="vuMic"></div>
+                  <div class="vu-meter-peak" id="vuPeakMic" style="left:0%"></div>
                 </div>
-                <span class="meter-db" id="dbL">-∞</span>
+                <span class="meter-db" id="dbMic">-&#8734;</span>
               </div>
               <div class="meter-row">
-                <span class="meter-label">R</span>
+                <span class="meter-label">MUSIC</span>
                 <div class="vu-meter">
-                  <div class="vu-meter-fill" id="vuR"></div>
-                  <div class="vu-meter-peak" id="vuPeakR" style="left:0%"></div>
+                  <div class="vu-meter-fill" id="vuMusic"></div>
+                  <div class="vu-meter-peak" id="vuPeakMusic" style="left:0%"></div>
                 </div>
-                <span class="meter-db" id="dbR">-∞</span>
+                <span class="meter-db" id="dbMusic">-&#8734;</span>
+              </div>
+              <div class="meter-row">
+                <span class="meter-label">CO-HOST</span>
+                <div class="vu-meter">
+                  <div class="vu-meter-fill" id="vuCohost"></div>
+                  <div class="vu-meter-peak" id="vuPeakCohost" style="left:0%"></div>
+                </div>
+                <span class="meter-db" id="dbCohost">-&#8734;</span>
               </div>
               <div class="meter-row">
                 <span class="meter-label">OUT</span>
@@ -999,7 +1007,7 @@
                   <div class="vu-meter-fill" id="vuOut"></div>
                   <div class="vu-meter-peak" id="vuPeakOut" style="left:0%"></div>
                 </div>
-                <span class="meter-db" id="dbOut">-∞</span>
+                <span class="meter-db" id="dbOut">-&#8734;</span>
               </div>
               <div class="waveform-container">
                 <canvas id="visualizer"></canvas>
@@ -1532,6 +1540,7 @@
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
+  <script src="/lamejs.js"></script>
   <script>
     const SERVER = window.location.origin;
     const socket = io(SERVER);
@@ -1543,8 +1552,9 @@
     let eqLowFilter, eqLowMidFilter, eqHighMidFilter, eqHighFilter;
     let compressorNode;
     let isRecording = false;
-    let recordedChunks = [];
-    let mediaRecorder;
+    let mp3Encoder = null;
+    let mp3Data = [];
+    let mp3RecordNode = null;
     let recordingStartTime, recordingInterval;
     let lastRecordingBlob = null;
     let lastRecordingTitle = '';
@@ -1556,7 +1566,7 @@
     let gateEnabled = false;
     let gateThreshold = -50;
 
-    let peakL = 0, peakR = 0, peakOut = 0;
+    let peakMic = 0, peakMusic = 0, peakCohost = 0, peakOut = 0;
     let currentSampleRate = 22050;
     let currentBitDepth = 16;
 
@@ -2191,34 +2201,64 @@
 
     // METERS
     function startMeters() {
-      const inputAnalyser = audioContext.createAnalyser();
-      inputAnalyser.fftSize = 1024;
-      gainNode.connect(inputAnalyser);
+      const micAnalyser = audioContext.createAnalyser();
+      micAnalyser.fftSize = 1024;
+      gainNode.connect(micAnalyser);
+
+      const musicAnalyser = audioContext.createAnalyser();
+      musicAnalyser.fftSize = 1024;
+      let musicAnalyserConnected = false;
 
       const outputAnalyser = analyserNode;
-      const inputBuf = new Float32Array(inputAnalyser.fftSize);
+      const micBuf = new Float32Array(micAnalyser.fftSize);
+      const musicBuf = new Float32Array(musicAnalyser.fftSize);
       const outputBuf = new Float32Array(outputAnalyser.fftSize);
 
       function updateMeters() {
         requestAnimationFrame(updateMeters);
 
-        inputAnalyser.getFloatTimeDomainData(inputBuf);
+        // MIC
+        micAnalyser.getFloatTimeDomainData(micBuf);
+        let maxMic = 0;
+        for (let i = 0; i < micBuf.length; i++) maxMic = Math.max(maxMic, Math.abs(micBuf[i]));
+        const dbMicVal = maxMic > 0 ? 20 * Math.log10(maxMic) : -Infinity;
+        peakMic = Math.max(peakMic * 0.95, maxMic);
+        setMeter('vuMic', 'vuPeakMic', 'dbMic', maxMic, peakMic, dbMicVal);
+
+        // MUSIC — dynamically connect when source nodes become available
+        if (!musicAnalyserConnected) {
+          if (musicGainNode) { try { musicGainNode.connect(musicAnalyser); musicAnalyserConnected = true; } catch(e) {} }
+          else if (extInputGain) { try { extInputGain.connect(musicAnalyser); musicAnalyserConnected = true; } catch(e) {} }
+        }
+        if (musicAnalyserConnected) {
+          musicAnalyser.getFloatTimeDomainData(musicBuf);
+          let maxMusic = 0;
+          for (let i = 0; i < musicBuf.length; i++) maxMusic = Math.max(maxMusic, Math.abs(musicBuf[i]));
+          const dbMusicVal = maxMusic > 0 ? 20 * Math.log10(maxMusic) : -Infinity;
+          peakMusic = Math.max(peakMusic * 0.95, maxMusic);
+          setMeter('vuMusic', 'vuPeakMusic', 'dbMusic', maxMusic, peakMusic, dbMusicVal);
+        } else {
+          setMeter('vuMusic', 'vuPeakMusic', 'dbMusic', 0, 0, -Infinity);
+        }
+
+        // CO-HOST — measure from PCM queue directly, no Web Audio analyser needed
+        let maxCohost = 0;
+        if (typeof cohostPcmQueue !== 'undefined' && cohostPcmQueue.length > 0) {
+          const lastChunk = cohostPcmQueue[cohostPcmQueue.length - 1];
+          if (lastChunk && lastChunk.length) {
+            for (let i = 0; i < lastChunk.length; i++) maxCohost = Math.max(maxCohost, Math.abs(lastChunk[i]));
+          }
+        }
+        const dbCohostVal = maxCohost > 0 ? 20 * Math.log10(maxCohost) : -Infinity;
+        peakCohost = Math.max(peakCohost * 0.95, maxCohost);
+        setMeter('vuCohost', 'vuPeakCohost', 'dbCohost', maxCohost, peakCohost, dbCohostVal);
+
+        // OUT
         outputAnalyser.getFloatTimeDomainData(outputBuf);
-
-        let maxL = 0;
-        for (let i = 0; i < inputBuf.length; i++) maxL = Math.max(maxL, Math.abs(inputBuf[i]));
-
         let maxOut = 0;
         for (let i = 0; i < outputBuf.length; i++) maxOut = Math.max(maxOut, Math.abs(outputBuf[i]));
-
-        const dbL = maxL > 0 ? 20 * Math.log10(maxL) : -Infinity;
         const dbO = maxOut > 0 ? 20 * Math.log10(maxOut) : -Infinity;
-
-        peakL = Math.max(peakL * 0.95, maxL);
         peakOut = Math.max(peakOut * 0.95, maxOut);
-
-        setMeter('vuL', 'vuPeakL', 'dbL', maxL, peakL, dbL);
-        setMeter('vuR', 'vuPeakR', 'dbR', maxL, peakL, dbL);
         setMeter('vuOut', 'vuPeakOut', 'dbOut', maxOut, peakOut, dbO);
 
         // Compressor GR meter
@@ -2468,7 +2508,15 @@
         document.getElementById('statusText').textContent = 'LIVE — ' + modeLabel;
         acquireWakeLock();
         startBroadcastKeepAlive();
+        // Auto-start recording when going live
+        if (!isRecording) {
+          toggleRecord();
+        }
       } else {
+        // Auto-stop recording and save when going offline
+        if (isRecording) {
+          toggleRecord();
+        }
         btn.textContent = 'GO LIVE';
         btn.classList.remove('live');
         badge.textContent = 'OFF AIR';
@@ -2479,7 +2527,7 @@
       }
     }
 
-    // RECORDING — uses processed audio from recordDestination
+    // RECORDING — MP3 encoding via lamejs, captures from recordDestination
     async function toggleRecord() {
       const btn = document.getElementById('recordBtn');
       const timer = document.getElementById('recordingTimer');
@@ -2493,90 +2541,46 @@
           return;
         }
 
-        recordedChunks = [];
-
-        // Use the processed audio stream from recordDestination
-        const recStream = recordDestination.stream;
-
-        // Pick a supported mimeType
-        let mimeType = 'audio/webm;codecs=opus';
-        if (!MediaRecorder.isTypeSupported(mimeType)) {
-          mimeType = 'audio/webm';
-          if (!MediaRecorder.isTypeSupported(mimeType)) {
-            mimeType = 'audio/mp4';
-            if (!MediaRecorder.isTypeSupported(mimeType)) {
-              mimeType = '';
-            }
-          }
-        }
+        const sampleRate = audioContext.sampleRate;
+        const kbps = 128;
+        mp3Data = [];
 
         try {
-          const options = mimeType ? { mimeType } : {};
-          mediaRecorder = new MediaRecorder(recStream, options);
+          mp3Encoder = new lamejs.Mp3Encoder(1, sampleRate, kbps);
         } catch (err) {
-          console.error('MediaRecorder failed:', err);
-          document.getElementById('statusText').textContent = 'Recording not supported in this browser';
+          console.error('MP3 encoder init failed:', err);
+          document.getElementById('statusText').textContent = 'MP3 encoder not available';
           return;
         }
 
-        mediaRecorder.ondataavailable = (e) => {
-          if (e.data && e.data.size > 0) recordedChunks.push(e.data);
+        // ScriptProcessorNode to capture PCM and encode to MP3 in real-time
+        const bufferSize = 4096;
+        mp3RecordNode = audioContext.createScriptProcessor(bufferSize, 1, 1);
+        mp3RecordNode.onaudioprocess = (e) => {
+          if (!isRecording || !mp3Encoder) return;
+          const pcm = e.inputBuffer.getChannelData(0);
+          const samples = new Int16Array(pcm.length);
+          for (let i = 0; i < pcm.length; i++) {
+            const s = Math.max(-1, Math.min(1, pcm[i]));
+            samples[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+          }
+          const mp3buf = mp3Encoder.encodeBuffer(samples);
+          if (mp3buf.length > 0) mp3Data.push(mp3buf);
         };
 
-        mediaRecorder.onerror = (e) => {
-          console.error('Recording error:', e);
-          isRecording = false;
-          btn.textContent = '● RECORD';
-          btn.classList.remove('recording');
-          timer.classList.remove('active');
-          clearInterval(recordingInterval);
-          document.getElementById('statusText').textContent = 'Recording error — try again';
-        };
+        // Connect recordDestination output → mp3RecordNode → destination (required for processing)
+        const recSource = audioContext.createMediaStreamSource(recordDestination.stream);
+        recSource.connect(mp3RecordNode);
+        mp3RecordNode.connect(audioContext.destination);
+        mp3RecordNode._recSource = recSource;
 
-        mediaRecorder.onstop = () => {
-          const type = mediaRecorder.mimeType || 'audio/webm';
-          const blob = new Blob(recordedChunks, { type });
-          const title = titleInput.value || `Transmission #${transmissions.length + 1}`;
-          const duration = (Date.now() - recordingStartTime) / 1000;
-
-          lastRecordingBlob = blob;
-          lastRecordingTitle = title;
-          document.getElementById('saveToComputerBtn').style.display = 'inline-block';
-
-          const reader = new FileReader();
-          reader.onload = async () => {
-            try {
-              const res = await fetch(`${SERVER}/api/transmissions`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ title, audioData: reader.result, duration })
-              });
-              const data = await res.json();
-              transmissions.push({ id: data.id, title, duration, audioData: reader.result });
-              renderTransmissions();
-              document.getElementById('statusText').textContent = `Saved: ${title} (${formatDuration(duration)})`;
-            } catch (err) {
-              console.error('Save failed:', err);
-              document.getElementById('statusText').textContent = 'Failed to save transmission';
-            }
-            titleInput.value = '';
-            titleInput.classList.remove('active');
-          };
-          reader.onerror = () => {
-            console.error('FileReader error');
-            document.getElementById('statusText').textContent = 'Failed to process recording';
-          };
-          reader.readAsDataURL(blob);
-        };
-
-        mediaRecorder.start(250);
         isRecording = true;
         recordingStartTime = Date.now();
         btn.textContent = '■ STOP';
         btn.classList.add('recording');
         timer.classList.add('active');
         titleInput.classList.add('active');
-        document.getElementById('statusText').textContent = 'Recording...';
+        document.getElementById('statusText').textContent = 'Recording (MP3)...';
 
         recordingInterval = setInterval(() => {
           const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
@@ -2584,27 +2588,85 @@
         }, 200);
 
       } else {
-        // STOP recording
-        try {
-          if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-            mediaRecorder.stop();
-          }
-        } catch (err) {
-          console.error('Stop error:', err);
-        }
+        // STOP recording — flush MP3 encoder and build blob
         isRecording = false;
         btn.textContent = '● RECORD';
         btn.classList.remove('recording');
         timer.classList.remove('active');
         clearInterval(recordingInterval);
-        document.getElementById('statusText').textContent = 'Processing recording...';
+        document.getElementById('statusText').textContent = 'Encoding MP3...';
+
+        // Disconnect the capture node
+        if (mp3RecordNode) {
+          try {
+            if (mp3RecordNode._recSource) mp3RecordNode._recSource.disconnect();
+            mp3RecordNode.disconnect();
+          } catch (e) {}
+          mp3RecordNode = null;
+        }
+
+        // Flush remaining MP3 data
+        if (mp3Encoder) {
+          const end = mp3Encoder.flush();
+          if (end.length > 0) mp3Data.push(end);
+          mp3Encoder = null;
+        }
+
+        const blob = new Blob(mp3Data, { type: 'audio/mpeg' });
+        mp3Data = [];
+        const now = new Date();
+        const dateStr = now.getFullYear() + '-' +
+          String(now.getMonth() + 1).padStart(2, '0') + '-' +
+          String(now.getDate()).padStart(2, '0') + '_' +
+          String(now.getHours()).padStart(2, '0') + '-' +
+          String(now.getMinutes()).padStart(2, '0');
+        const title = titleInput.value || `Transmission ${dateStr}`;
+        const duration = (Date.now() - recordingStartTime) / 1000;
+
+        lastRecordingBlob = blob;
+        lastRecordingTitle = title;
+        document.getElementById('saveToComputerBtn').style.display = 'inline-block';
+
+        // Auto-download the MP3
+        saveRecordingToComputer();
+
+        // Also save to server transmissions
+        const reader = new FileReader();
+        reader.onload = async () => {
+          try {
+            const res = await fetch(`${SERVER}/api/transmissions`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ title, audioData: reader.result, duration })
+            });
+            const data = await res.json();
+            transmissions.push({ id: data.id, title, duration, audioData: reader.result });
+            renderTransmissions();
+            document.getElementById('statusText').textContent = `Saved: ${title} (${formatDuration(duration)})`;
+          } catch (err) {
+            console.error('Save failed:', err);
+            document.getElementById('statusText').textContent = 'Failed to save transmission';
+          }
+          titleInput.value = '';
+          titleInput.classList.remove('active');
+        };
+        reader.onerror = () => {
+          document.getElementById('statusText').textContent = 'Failed to process recording';
+        };
+        reader.readAsDataURL(blob);
       }
     }
 
     function saveRecordingToComputer() {
       if (!lastRecordingBlob) return;
-      const ext = lastRecordingBlob.type.includes('mp4') ? 'mp4' : 'webm';
-      const filename = (lastRecordingTitle || 'recording').replace(/[^a-zA-Z0-9 _-]/g, '') + '.' + ext;
+      const now = new Date();
+      const dateStr = now.getFullYear() + '-' +
+        String(now.getMonth() + 1).padStart(2, '0') + '-' +
+        String(now.getDate()).padStart(2, '0') + '_' +
+        String(now.getHours()).padStart(2, '0') + '-' +
+        String(now.getMinutes()).padStart(2, '0');
+      const safeName = (lastRecordingTitle || 'recording').replace(/[^a-zA-Z0-9 _-]/g, '');
+      const filename = safeName + '_' + dateStr + '.mp3';
       const url = URL.createObjectURL(lastRecordingBlob);
       const a = document.createElement('a');
       a.href = url;
