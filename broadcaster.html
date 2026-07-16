@@ -221,29 +221,30 @@
     .meters-area {
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 6px;
     }
 
     .meter-row {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 8px;
     }
 
     .meter-label {
-      font-size: 9px;
+      font-size: 10px;
+      font-weight: bold;
       letter-spacing: 2px;
-      color: var(--text-dim);
-      min-width: 35px;
+      color: var(--text);
+      min-width: 55px;
       text-align: right;
     }
 
     .vu-meter {
       flex: 1;
-      height: 18px;
+      height: 22px;
       background: var(--bg);
-      border: 1px solid #222;
-      border-radius: 3px;
+      border: 1px solid #333;
+      border-radius: 4px;
       overflow: hidden;
       position: relative;
     }
@@ -253,7 +254,7 @@
       width: 0%;
       background: linear-gradient(90deg, var(--green) 0%, var(--green) 60%, var(--amber) 80%, var(--red) 100%);
       transition: width 0.05s linear;
-      border-radius: 2px;
+      border-radius: 3px;
     }
 
     .vu-meter-peak {
@@ -263,6 +264,48 @@
       height: 100%;
       background: #fff;
       transition: left 0.1s;
+    }
+
+    .meter-vol {
+      width: 70px;
+      height: 22px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: transparent;
+      cursor: pointer;
+    }
+    .meter-vol::-webkit-slider-runnable-track {
+      height: 6px;
+      background: #333;
+      border-radius: 3px;
+    }
+    .meter-vol::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--green);
+      margin-top: -5px;
+      border: 2px solid #fff;
+    }
+    .meter-vol::-moz-range-track {
+      height: 6px;
+      background: #333;
+      border-radius: 3px;
+    }
+    .meter-vol::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--green);
+      border: 2px solid #fff;
+    }
+    .meter-vol-val {
+      font-size: 10px;
+      color: var(--amber);
+      min-width: 30px;
+      text-align: center;
+      font-weight: bold;
     }
 
     .vu-meter-marks {
@@ -861,10 +904,12 @@
 
       .go-live-area .input-select { flex: 1; }
 
-      .meters-area { gap: 6px; }
-      .meter-label { font-size: 8px; min-width: 28px; }
-      .meter-db { font-size: 9px; min-width: 35px; }
-      .vu-meter { height: 14px; }
+      .meters-area { gap: 5px; }
+      .meter-label { font-size: 9px; min-width: 45px; font-weight: bold; }
+      .meter-db { font-size: 9px; min-width: 32px; }
+      .vu-meter { height: 20px; }
+      .meter-vol { width: 55px; height: 20px; }
+      .meter-vol-val { font-size: 9px; min-width: 28px; }
       .waveform-container { height: 50px; }
 
       /* Mixer grid: single column */
@@ -984,6 +1029,8 @@
                   <div class="vu-meter-peak" id="vuPeakMic" style="left:0%"></div>
                 </div>
                 <span class="meter-db" id="dbMic">-&#8734;</span>
+                <input type="range" class="meter-vol" id="meterVolMic" min="0" max="1.5" step="0.01" value="1" oninput="updateMeterVol('mic')">
+                <span class="meter-vol-val" id="meterVolMicVal">100%</span>
               </div>
               <div class="meter-row">
                 <span class="meter-label">MUSIC</span>
@@ -992,6 +1039,8 @@
                   <div class="vu-meter-peak" id="vuPeakMusic" style="left:0%"></div>
                 </div>
                 <span class="meter-db" id="dbMusic">-&#8734;</span>
+                <input type="range" class="meter-vol" id="meterVolMusic" min="0" max="1.5" step="0.01" value="0.5" oninput="updateMeterVol('music')">
+                <span class="meter-vol-val" id="meterVolMusicVal">50%</span>
               </div>
               <div class="meter-row">
                 <span class="meter-label">CO-HOST</span>
@@ -1000,6 +1049,8 @@
                   <div class="vu-meter-peak" id="vuPeakCohost" style="left:0%"></div>
                 </div>
                 <span class="meter-db" id="dbCohost">-&#8734;</span>
+                <input type="range" class="meter-vol" id="meterVolCohost" min="0" max="1.5" step="0.01" value="1" oninput="updateMeterVol('cohost')">
+                <span class="meter-vol-val" id="meterVolCohostVal">100%</span>
               </div>
               <div class="meter-row">
                 <span class="meter-label">OUT</span>
@@ -1008,6 +1059,8 @@
                   <div class="vu-meter-peak" id="vuPeakOut" style="left:0%"></div>
                 </div>
                 <span class="meter-db" id="dbOut">-&#8734;</span>
+                <input type="range" class="meter-vol" id="meterVolOut" min="0" max="1.5" step="0.01" value="1" oninput="updateMeterVol('out')">
+                <span class="meter-vol-val" id="meterVolOutVal">100%</span>
               </div>
               <div class="waveform-container">
                 <canvas id="visualizer"></canvas>
@@ -2082,7 +2135,8 @@
             if (hasCohostAudio) {
               const chunk = cohostPcmQueue.shift();
               const len = Math.min(outputData.length, chunk.length);
-              for (let i = 0; i < len; i++) outputData[i] += chunk[i];
+              const cvs = typeof cohostVolumeScale !== 'undefined' ? cohostVolumeScale : 1;
+              for (let i = 0; i < len; i++) outputData[i] += chunk[i] * cvs;
             }
             if (hasDjAudio) {
               const chunk = djInputPcmQueue.shift();
@@ -2298,6 +2352,24 @@
       const db = parseFloat(document.getElementById('outputLevel').value);
       document.getElementById('outputLevelVal').textContent = (db > 0 ? '+' : '') + db + ' dB';
       if (outputGainNode) smoothGain(outputGainNode.gain, dbToGain(db));
+    }
+
+    let cohostVolumeScale = 1;
+    function updateMeterVol(ch) {
+      const slider = document.getElementById('meterVol' + ch.charAt(0).toUpperCase() + ch.slice(1));
+      const label = document.getElementById('meterVol' + ch.charAt(0).toUpperCase() + ch.slice(1) + 'Val');
+      const val = parseFloat(slider.value);
+      label.textContent = Math.round(val * 100) + '%';
+      if (ch === 'mic') {
+        if (gainNode && !micMuted) smoothGain(gainNode.gain, val * dbToGain(parseFloat(document.getElementById('inputGain').value)));
+      } else if (ch === 'music') {
+        document.getElementById('musicVolume').value = val;
+        updateMusicVol();
+      } else if (ch === 'cohost') {
+        cohostVolumeScale = val;
+      } else if (ch === 'out') {
+        if (outputGainNode) smoothGain(outputGainNode.gain, val * dbToGain(parseFloat(document.getElementById('outputLevel').value)));
+      }
     }
 
     function updateMakeup() {
