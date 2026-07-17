@@ -1053,6 +1053,16 @@
                 <span class="meter-vol-val" id="meterVolCohostVal">100%</span>
               </div>
               <div class="meter-row">
+                <span class="meter-label">DJ</span>
+                <div class="vu-meter">
+                  <div class="vu-meter-fill" id="vuDj"></div>
+                  <div class="vu-meter-peak" id="vuPeakDj" style="left:0%"></div>
+                </div>
+                <span class="meter-db" id="dbDj">-&#8734;</span>
+                <input type="range" class="meter-vol" id="meterVolDj" min="0" max="1.5" step="0.01" value="1" oninput="updateMeterVol('dj')">
+                <span class="meter-vol-val" id="meterVolDjVal">100%</span>
+              </div>
+              <div class="meter-row">
                 <span class="meter-label">OUT</span>
                 <div class="vu-meter">
                   <div class="vu-meter-fill" id="vuOut"></div>
@@ -1619,7 +1629,7 @@
     let gateEnabled = false;
     let gateThreshold = -50;
 
-    let peakMic = 0, peakMusic = 0, peakCohost = 0, peakOut = 0;
+    let peakMic = 0, peakMusic = 0, peakCohost = 0, peakDj = 0, peakOut = 0;
     let currentSampleRate = 22050;
     let currentBitDepth = 16;
 
@@ -2141,7 +2151,8 @@
             if (hasDjAudio) {
               const chunk = djInputPcmQueue.shift();
               const len = Math.min(outputData.length, chunk.length);
-              for (let i = 0; i < len; i++) outputData[i] += chunk[i];
+              const dvs = typeof djVolumeScale !== 'undefined' ? djVolumeScale : 1;
+              for (let i = 0; i < len; i++) outputData[i] += chunk[i] * dvs;
             }
             // Clamp after mixing all sources
             for (let i = 0; i < outputData.length; i++) {
@@ -2307,6 +2318,18 @@
         peakCohost = Math.max(peakCohost * 0.95, maxCohost);
         setMeter('vuCohost', 'vuPeakCohost', 'dbCohost', maxCohost, peakCohost, dbCohostVal);
 
+        // DJ — measure from PCM queue directly
+        let maxDj = 0;
+        if (typeof djInputPcmQueue !== 'undefined' && djInputPcmQueue.length > 0) {
+          const lastChunk = djInputPcmQueue[djInputPcmQueue.length - 1];
+          if (lastChunk && lastChunk.length) {
+            for (let i = 0; i < lastChunk.length; i++) maxDj = Math.max(maxDj, Math.abs(lastChunk[i]));
+          }
+        }
+        const dbDjVal = maxDj > 0 ? 20 * Math.log10(maxDj) : -Infinity;
+        peakDj = Math.max(peakDj * 0.95, maxDj);
+        setMeter('vuDj', 'vuPeakDj', 'dbDj', maxDj, peakDj, dbDjVal);
+
         // OUT
         outputAnalyser.getFloatTimeDomainData(outputBuf);
         let maxOut = 0;
@@ -2355,6 +2378,7 @@
     }
 
     let cohostVolumeScale = 1;
+    let djVolumeScale = 1;
     function updateMeterVol(ch) {
       const slider = document.getElementById('meterVol' + ch.charAt(0).toUpperCase() + ch.slice(1));
       const label = document.getElementById('meterVol' + ch.charAt(0).toUpperCase() + ch.slice(1) + 'Val');
@@ -2367,6 +2391,8 @@
         updateMusicVol();
       } else if (ch === 'cohost') {
         cohostVolumeScale = val;
+      } else if (ch === 'dj') {
+        djVolumeScale = val;
       } else if (ch === 'out') {
         if (outputGainNode) smoothGain(outputGainNode.gain, val * dbToGain(parseFloat(document.getElementById('outputLevel').value)));
       }
