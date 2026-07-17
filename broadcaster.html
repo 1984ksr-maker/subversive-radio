@@ -3839,7 +3839,7 @@
       }
       cohostPcmQueue.push(floats);
       cohostActive = true;
-      while (cohostPcmQueue.length > 4) cohostPcmQueue.shift();
+      while (cohostPcmQueue.length > 2) cohostPcmQueue.shift();
     });
 
     // ========== CO-HOST CONTROL ==========
@@ -4062,7 +4062,7 @@
       }
       djInputPcmQueue.push(floats);
       djInputActive = true;
-      while (djInputPcmQueue.length > 4) djInputPcmQueue.shift();
+      while (djInputPcmQueue.length > 2) djInputPcmQueue.shift();
     });
 
     function showSidebarTab(tab) {

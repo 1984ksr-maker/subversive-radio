@@ -323,7 +323,7 @@
         analyserNode = audioContext.createAnalyser();
         analyserNode.fftSize = 256;
 
-        const bufferSize = 4096;
+        const bufferSize = 2048;
         processorNode = audioContext.createScriptProcessor(bufferSize, 1, 1);
 
         sourceNode.connect(analyserNode);
