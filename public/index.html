@@ -557,8 +557,8 @@
 
     // Audio buffer queue for smooth playback
     let nextPlayTime = 0;
-    const BUFFER_AHEAD = 0.25;
-    const MAX_BUFFER_AHEAD = 1.5;
+    const BUFFER_AHEAD = 0.05;
+    const MAX_BUFFER_AHEAD = 0.5;
     let activeSources = [];
 
     function connectSocket() {
@@ -797,10 +797,11 @@
           if (idx !== -1) activeSources.splice(idx, 1);
         };
 
-        // Safety: if too many sources queued, something is wrong — flush old ones
-        if (activeSources.length > 20) {
-          const stale = activeSources.splice(0, activeSources.length - 10);
+        // Safety: flush old sources aggressively to prevent delay buildup
+        if (activeSources.length > 5) {
+          const stale = activeSources.splice(0, activeSources.length - 2);
           stale.forEach(s => { try { s.stop(); } catch(e) {} });
+          nextPlayTime = now + BUFFER_AHEAD;
         }
 
         nextPlayTime += duration;
