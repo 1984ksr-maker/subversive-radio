@@ -2152,19 +2152,21 @@
             if (dbRms < gateThreshold) return;
           }
 
-          // Mix in remote audio (co-host + DJ input) — directly into PCM, bypasses speakers
+          // Mix in remote audio (co-host + DJ input) — use only the LATEST chunk, discard old ones
           let outputData = inputData;
           if (hasCohostAudio || hasDjAudio) {
             outputData = new Float32Array(inputData.length);
             outputData.set(inputData);
             if (hasCohostAudio) {
-              const chunk = cohostPcmQueue.shift();
+              const chunk = cohostPcmQueue[cohostPcmQueue.length - 1];
+              cohostPcmQueue.length = 0;
               const len = Math.min(outputData.length, chunk.length);
               const cvs = typeof cohostVolumeScale !== 'undefined' ? cohostVolumeScale : 1;
               for (let i = 0; i < len; i++) outputData[i] += chunk[i] * cvs;
             }
             if (hasDjAudio) {
-              const chunk = djInputPcmQueue.shift();
+              const chunk = djInputPcmQueue[djInputPcmQueue.length - 1];
+              djInputPcmQueue.length = 0;
               const len = Math.min(outputData.length, chunk.length);
               const dvs = typeof djVolumeScale !== 'undefined' ? djVolumeScale : 1;
               for (let i = 0; i < len; i++) outputData[i] += chunk[i] * dvs;
@@ -3854,7 +3856,7 @@
       }
       cohostPcmQueue.push(floats);
       cohostActive = true;
-      while (cohostPcmQueue.length > 2) cohostPcmQueue.shift();
+      if (cohostPcmQueue.length > 1) cohostPcmQueue.splice(0, cohostPcmQueue.length - 1);
     });
 
     // ========== CO-HOST CONTROL ==========
@@ -4077,7 +4079,7 @@
       }
       djInputPcmQueue.push(floats);
       djInputActive = true;
-      while (djInputPcmQueue.length > 2) djInputPcmQueue.shift();
+      if (djInputPcmQueue.length > 1) djInputPcmQueue.splice(0, djInputPcmQueue.length - 1);
     });
 
     function showSidebarTab(tab) {
