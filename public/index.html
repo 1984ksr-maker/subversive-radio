@@ -1107,8 +1107,11 @@
       input.value = '';
     }
 
-    // Listen for chat events after socket connects
+    // Listen for chat events after socket connects — only bind once
+    let chatSetup = false;
     function setupChat() {
+      if (chatSetup) return;
+      chatSetup = true;
       socket.on('chat-message', addChatMessage);
       socket.on('chat-pin', (msgId) => {
         const pinned = document.getElementById('chatPinned');
