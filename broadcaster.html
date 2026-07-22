@@ -3113,10 +3113,24 @@
     function updateMusicVol() {
       const val = parseFloat(document.getElementById('musicVolume').value);
       document.getElementById('musicVolVal').textContent = Math.round(val * 100) + '%';
-      if (musicGainNode) smoothGain(musicGainNode.gain, val);
-      if (radioGainNode) smoothGain(radioGainNode.gain, val);
-      if (systemAudioGain) smoothGain(systemAudioGain.gain, val);
+      const now = audioContext ? audioContext.currentTime : 0;
+      if (musicGainNode) {
+        musicGainNode.gain.cancelScheduledValues(now);
+        musicGainNode.gain.setValueAtTime(musicGainNode.gain.value, now);
+        smoothGain(musicGainNode.gain, val);
+      }
+      if (radioGainNode) {
+        radioGainNode.gain.cancelScheduledValues(now);
+        radioGainNode.gain.setValueAtTime(radioGainNode.gain.value, now);
+        smoothGain(radioGainNode.gain, val);
+      }
+      if (systemAudioGain) {
+        systemAudioGain.gain.cancelScheduledValues(now);
+        systemAudioGain.gain.setValueAtTime(systemAudioGain.gain.value, now);
+        smoothGain(systemAudioGain.gain, val);
+      }
       musicTargetVol = val;
+      autoDuckActive = false;
     }
 
     function updateMicMixVol() {
