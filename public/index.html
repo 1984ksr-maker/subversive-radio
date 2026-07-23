@@ -513,8 +513,8 @@
 
         <div class="volume-bar">
           <label>VOL</label>
-          <input type="range" id="volume" min="0" max="4" step="0.05" value="1" oninput="updateVolume(this.value)">
-          <span class="vol-value" id="volValue">0 dB</span>
+          <input type="range" id="volume" min="0" max="4" step="0.05" value="2" oninput="updateVolume(this.value)">
+          <span class="vol-value" id="volValue">+6 dB</span>
         </div>
       </div>
 
@@ -735,13 +735,13 @@
       gainNode = audioContext.createGain();
       gainNode.gain.value = parseFloat(document.getElementById('volume').value);
 
-      // Limiter on listener side too — prevent speaker damage from boost
+      // Gentle safety limiter — only catches extreme peaks from volume boost
       const listenerLimiter = audioContext.createDynamicsCompressor();
-      listenerLimiter.threshold.value = -1;
-      listenerLimiter.ratio.value = 20;
-      listenerLimiter.attack.value = 0.001;
-      listenerLimiter.release.value = 0.05;
-      listenerLimiter.knee.value = 0;
+      listenerLimiter.threshold.value = -3;
+      listenerLimiter.ratio.value = 8;
+      listenerLimiter.attack.value = 0.003;
+      listenerLimiter.release.value = 0.15;
+      listenerLimiter.knee.value = 6;
 
       analyser = audioContext.createAnalyser();
       analyser.fftSize = 256;
@@ -752,13 +752,16 @@
       drawRing();
     }
 
+    // Accumulate small chunks into larger buffers for smoother playback
+    let pendingSamples = new Float32Array(0);
+    const MIN_CHUNK_SAMPLES = 4096;
+
     function playAudioChunk(arrayBuffer) {
       try {
         let int16;
         if (arrayBuffer instanceof ArrayBuffer) {
           int16 = new Int16Array(arrayBuffer);
         } else if (arrayBuffer.buffer) {
-          // Node.js Buffer or TypedArray — may have non-zero byteOffset
           const aligned = new Uint8Array(arrayBuffer).buffer;
           int16 = new Int16Array(aligned);
         } else {
@@ -771,8 +774,19 @@
           float32[i] = int16[i] / 32768;
         }
 
-        const buffer = audioContext.createBuffer(1, float32.length, broadcastSampleRate);
-        buffer.getChannelData(0).set(float32);
+        // Accumulate small chunks to reduce scheduling artifacts
+        const merged = new Float32Array(pendingSamples.length + float32.length);
+        merged.set(pendingSamples);
+        merged.set(float32, pendingSamples.length);
+
+        if (merged.length < MIN_CHUNK_SAMPLES) {
+          pendingSamples = merged;
+          return;
+        }
+        pendingSamples = new Float32Array(0);
+
+        const buffer = audioContext.createBuffer(1, merged.length, broadcastSampleRate);
+        buffer.getChannelData(0).set(merged);
         const duration = buffer.duration;
         const now = audioContext.currentTime;
 
@@ -797,9 +811,8 @@
           if (idx !== -1) activeSources.splice(idx, 1);
         };
 
-        // Safety: flush old sources aggressively to prevent delay buildup
-        if (activeSources.length > 5) {
-          const stale = activeSources.splice(0, activeSources.length - 2);
+        if (activeSources.length > 8) {
+          const stale = activeSources.splice(0, activeSources.length - 3);
           stale.forEach(s => { try { s.stop(); } catch(e) {} });
           nextPlayTime = now + BUFFER_AHEAD;
         }
