@@ -2281,6 +2281,7 @@
       const musicAnalyser = audioContext.createAnalyser();
       musicAnalyser.fftSize = 1024;
       let musicAnalyserConnected = false;
+      let musicAnalyserSource = null;
 
       const outputAnalyser = analyserNode;
       const micBuf = new Float32Array(micAnalyser.fftSize);
@@ -2299,9 +2300,21 @@
         setMeter('vuMic', 'vuPeakMic', 'dbMic', maxMic, peakMic, dbMicVal);
 
         // MUSIC — dynamically connect when source nodes become available
+        // Track which node is connected so we can switch when source changes
         if (!musicAnalyserConnected) {
-          if (musicGainNode) { try { musicGainNode.connect(musicAnalyser); musicAnalyserConnected = true; } catch(e) {} }
-          else if (extInputGain) { try { extInputGain.connect(musicAnalyser); musicAnalyserConnected = true; } catch(e) {} }
+          if (radioGainNode) { try { radioGainNode.connect(musicAnalyser); musicAnalyserConnected = true; musicAnalyserSource = 'radio'; } catch(e) {} }
+          else if (musicGainNode) { try { musicGainNode.connect(musicAnalyser); musicAnalyserConnected = true; musicAnalyserSource = 'music'; } catch(e) {} }
+          else if (extInputGain) { try { extInputGain.connect(musicAnalyser); musicAnalyserConnected = true; musicAnalyserSource = 'ext'; } catch(e) {} }
+        } else {
+          // Reconnect if source changed (e.g. switched from file to radio stream)
+          if (radioGainNode && musicAnalyserSource !== 'radio') {
+            try { if (musicGainNode) musicGainNode.disconnect(musicAnalyser); } catch(e) {}
+            try { if (extInputGain) extInputGain.disconnect(musicAnalyser); } catch(e) {}
+            try { radioGainNode.connect(musicAnalyser); musicAnalyserSource = 'radio'; } catch(e) {}
+          } else if (!radioGainNode && musicGainNode && musicAnalyserSource !== 'music') {
+            try { radioGainNode && radioGainNode.disconnect(musicAnalyser); } catch(e) {}
+            try { musicGainNode.connect(musicAnalyser); musicAnalyserSource = 'music'; } catch(e) {}
+          }
         }
         if (musicAnalyserConnected) {
           musicAnalyser.getFloatTimeDomainData(musicBuf);
@@ -3217,6 +3230,8 @@
       }
       if (radioSourceNode) { try { radioSourceNode.disconnect(); } catch(e) {} radioSourceNode = null; }
       if (radioGainNode) { try { radioGainNode.disconnect(); } catch(e) {} radioGainNode = null; }
+      musicAnalyserConnected = false;
+      musicAnalyserSource = null;
       document.getElementById('radioNowPlaying').style.display = 'none';
     }
 
