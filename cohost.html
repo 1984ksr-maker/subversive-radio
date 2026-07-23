@@ -220,7 +220,7 @@
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const socket = io(window.location.origin, {
-      transports: ['polling', 'websocket'],
+      transports: ['websocket', 'polling'],
       upgrade: true,
       reconnection: true,
       reconnectionDelay: 500,
@@ -231,6 +231,7 @@
     let micActive = false;
     let micAllowed = false;
     let connected = false;
+    let cohostSampleRate = 44100;
 
     socket.on('connect', () => {
       connected = true;
@@ -238,6 +239,10 @@
       const name = document.getElementById('cohostName').value.trim() || 'Co-Host';
       socket.emit('join-cohost', { name });
       updateStatus();
+    });
+
+    socket.on('station-info', (info) => {
+      if (info && info.sampleRate) cohostSampleRate = info.sampleRate;
     });
 
     socket.on('disconnect', () => {
@@ -312,7 +317,7 @@
 
     async function startMic() {
       try {
-        audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 22050 });
+        audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: cohostSampleRate });
         await audioContext.resume();
 
         mediaStream = await navigator.mediaDevices.getUserMedia({

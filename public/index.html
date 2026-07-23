@@ -553,12 +553,12 @@
     let analyser;
     let reconnectAttempts = 0;
     let currentTransmissionAudio = null;
-    let broadcastSampleRate = 22050;
+    let broadcastSampleRate = 44100;
 
     // Audio buffer queue for smooth playback
     let nextPlayTime = 0;
-    const BUFFER_AHEAD = 0.05;
-    const MAX_BUFFER_AHEAD = 0.5;
+    const BUFFER_AHEAD = 0.12;
+    const MAX_BUFFER_AHEAD = 0.8;
     let activeSources = [];
 
     function connectSocket() {
@@ -569,7 +569,7 @@
         reconnectionDelayMax: 3000,
         reconnectionAttempts: Infinity,
         timeout: 30000,
-        transports: ['polling', 'websocket'],
+        transports: ['websocket', 'polling'],
         upgrade: true,
         forceNew: false
       });

@@ -182,7 +182,7 @@
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const socket = io(window.location.origin, {
-      transports: ['polling', 'websocket'],
+      transports: ['websocket', 'polling'],
       upgrade: true,
       reconnection: true,
       reconnectionDelay: 500,
@@ -195,6 +195,7 @@
     let audioEl = null;
     let allowed = false;
     let connected = false;
+    let djSampleRate = 44100;
 
     // Socket events
     socket.on('connect', () => {
@@ -202,6 +203,10 @@
       document.getElementById('connDot').classList.add('ok');
       socket.emit('join-dj-input', { name: 'iPad DJ' });
       updateStatus();
+    });
+
+    socket.on('station-info', (info) => {
+      if (info && info.sampleRate) djSampleRate = info.sampleRate;
     });
 
     socket.on('disconnect', () => {
@@ -362,7 +367,7 @@
 
       if (audioContext) { try { audioContext.close(); } catch(e) {} }
 
-      audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 22050 });
+      audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: djSampleRate });
       audioContext.resume();
 
       try {
