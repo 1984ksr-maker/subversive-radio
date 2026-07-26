@@ -2899,7 +2899,7 @@
     function playTransmission(id) { socket.emit('play-transmission', id); }
 
     async function deleteTransmission(id) {
-      await fetch(`${SERVER}/api/transmissions/${id}`, { method: 'DELETE' });
+      await fetch(`${SERVER}/api/transmissions/${id}?channel=${encodeURIComponent(currentChannel)}`, { method: 'DELETE' });
       transmissions = transmissions.filter(t => t.id !== id);
       renderTransmissions();
     }
@@ -2927,14 +2927,14 @@
     }
 
     // INIT
-    fetch(`${SERVER}/api/station`).then(r => r.json()).then(data => {
+    fetch(`${SERVER}/api/station?channel=${encodeURIComponent(currentChannel)}`).then(r => r.json()).then(data => {
       if (data.tunnelUrl) {
         document.getElementById('broadcastLink').value = data.tunnelUrl;
         document.getElementById('serverInfo').textContent = data.tunnelUrl;
       }
     }).catch(() => {});
 
-    fetch(`${SERVER}/api/transmissions`).then(r => r.json()).then(data => {
+    fetch(`${SERVER}/api/transmissions?channel=${encodeURIComponent(currentChannel)}`).then(r => r.json()).then(data => {
       transmissions = data;
       renderTransmissions();
     }).catch(() => {});

@@ -501,7 +501,7 @@ app.post('/api/transmissions', (req, res) => {
   const ch = getChannel(channelId);
   if (!ch) return res.status(404).json({ error: 'Channel not found' });
   if (!audioData || typeof audioData !== 'string') return res.status(400).json({ error: 'Missing audio data' });
-  if (audioData.length > 40 * 1024 * 1024) return res.status(413).json({ error: 'Transmission too large (max 30MB)' });
+  if (audioData.length > 40 * 1024 * 1024) return res.status(413).json({ error: 'Transmission too large (max 40MB)' });
   const transmission = {
     id: uuidv4(),
     title: title || `Transmission #${ch.transmissions.length + 1}`,
@@ -839,9 +839,9 @@ io.on('connection', (socket) => {
     writeToChannelStreamClients(ch, data);
   });
 
-  // STATION CONTROLS — per channel
+  // STATION CONTROLS — per channel (broadcaster only)
   socket.on('go-live', (info) => {
-    if (!myChannelId) return;
+    if (!isBroadcaster || !myChannelId) return;
     const ch = myChannel();
     if (!ch) return;
     ch.stationInfo.isLive = true;
@@ -855,7 +855,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('go-offline', () => {
-    if (!myChannelId) return;
+    if (!isBroadcaster || !myChannelId) return;
     const ch = myChannel();
     if (!ch) return;
     ch.stationInfo.isLive = false;
@@ -866,7 +866,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('play-transmission', (id) => {
-    if (!myChannelId) return;
+    if (!isBroadcaster || !myChannelId) return;
     const ch = myChannel();
     if (!ch) return;
     const t = ch.transmissions.find(tr => tr.id === id);
@@ -881,7 +881,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('transmission-ended', () => {
-    if (!myChannelId) return;
+    if (!isBroadcaster || !myChannelId) return;
     const ch = myChannel();
     if (!ch) return;
     ch.stationInfo.currentTransmission = null;
@@ -889,7 +889,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('update-station', (info) => {
-    if (!myChannelId) return;
+    if (!isBroadcaster || !myChannelId) return;
     const ch = myChannel();
     if (!ch) return;
     ch.stationInfo.name = info.name || ch.stationInfo.name;
