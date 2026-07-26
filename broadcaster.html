@@ -1656,6 +1656,10 @@
 
     function switchChannel(channelId) {
       if (channelId === currentChannel) return;
+      if (lockedChannel) {
+        document.getElementById('channelSelect').value = currentChannel;
+        return;
+      }
       if (isLive) {
         if (!confirm('You are ON AIR. Switching channels will take you offline. Continue?')) {
           document.getElementById('channelSelect').value = currentChannel;

@@ -674,11 +674,18 @@ io.on('connection', (socket) => {
 
   function myChannel() { return getChannel(myChannelId); }
 
-  // BROADCASTER — now includes channelId
+  // BROADCASTER — now includes channelId with channel lock enforcement
   socket.on('join-broadcaster', (opts) => {
     const channelId = (opts && opts.channel) || 'main';
     const ch = getChannel(channelId);
     if (!ch) return socket.emit('error-msg', 'Channel not found');
+
+    // Server-side channel lock: check if this user's session is locked to a different channel
+    const sessionToken = parseCookies(socket.handshake).br_token;
+    const session = sessionToken ? activeSessions.get(sessionToken) : null;
+    if (session && session.channel && session.channel !== channelId) {
+      return socket.emit('error-msg', 'Your access code is locked to channel: ' + session.channel);
+    }
 
     socket.join('broadcaster-' + channelId);
     isBroadcaster = true;
