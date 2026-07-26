@@ -488,6 +488,7 @@
   <div class="radio">
     <div class="radio-body">
       <div class="station-badge" id="badge">CONNECTING</div>
+      <div id="channelBar" style="display:none;margin-bottom:8px;display:flex;gap:6px;flex-wrap:wrap;justify-content:center"></div>
       <div class="station-name" id="stationName">SUBVERSIVE RADIO</div>
       <div class="station-tagline" id="stationTagline">Broadcasting from the underground</div>
 
@@ -555,6 +556,41 @@
     let currentTransmissionAudio = null;
     let broadcastSampleRate = 44100;
 
+    // Channel support
+    const currentChannelId = new URLSearchParams(window.location.search).get('channel') || 'main';
+
+    async function loadChannelButtons() {
+      try {
+        const res = await fetch('/api/channels');
+        const list = await res.json();
+        if (list.length <= 1) { document.getElementById('channelBar').style.display = 'none'; return; }
+        const bar = document.getElementById('channelBar');
+        bar.style.display = 'flex';
+        bar.innerHTML = '';
+        list.forEach(ch => {
+          const btn = document.createElement('button');
+          btn.textContent = ch.name + (ch.isLive ? ' ●' : '');
+          btn.style.cssText = 'padding:4px 12px;border-radius:12px;font-family:inherit;font-size:9px;letter-spacing:1px;cursor:pointer;transition:all 0.2s;border:1px solid #333;background:transparent;color:#888;';
+          if (ch.id === currentChannelId) {
+            btn.style.borderColor = '#ff2d2d';
+            btn.style.color = '#ff2d2d';
+            btn.style.background = 'rgba(255,45,45,0.1)';
+          }
+          if (ch.isLive) btn.style.color = ch.id === currentChannelId ? '#ff2d2d' : '#00ff88';
+          btn.onclick = () => {
+            if (ch.id === currentChannelId) return;
+            const u = new URL(window.location);
+            if (ch.id === 'main') u.searchParams.delete('channel');
+            else u.searchParams.set('channel', ch.id);
+            window.location.href = u.toString();
+          };
+          bar.appendChild(btn);
+        });
+      } catch (e) {}
+    }
+    loadChannelButtons();
+    setInterval(loadChannelButtons, 10000);
+
     // Audio buffer queue for smooth playback
     let nextPlayTime = 0;
     const BUFFER_AHEAD = 0.12;
@@ -576,7 +612,9 @@
 
       socket.on('connect', () => {
         reconnectAttempts = 0;
-        socket.emit('join-listener');
+        const urlParams = new URLSearchParams(window.location.search);
+        const channelId = urlParams.get('channel') || 'main';
+        socket.emit('join-listener', { channel: channelId });
         document.getElementById('statusDot').className = 'status-dot connected';
         document.getElementById('statusText').textContent = 'Connected — waiting for broadcast';
         document.getElementById('badge').textContent = 'CONNECTED';

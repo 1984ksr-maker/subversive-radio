@@ -9,20 +9,16 @@ const crypto = require('crypto');
 const app = express();
 const server = http.createServer(app);
 
-// OPTIMIZED for 100+ concurrent listeners
 const io = new Server(server, {
   cors: { origin: '*' },
   maxHttpBufferSize: 1e7,
-  // Stable connection settings
-  pingTimeout: 120000,        // 2 min before considering disconnected
-  pingInterval: 15000,        // check every 15s
-  connectTimeout: 30000,      // 30s to connect
-  // Transport optimization
-  transports: ['websocket', 'polling'], // prefer websocket, fallback to polling
+  pingTimeout: 120000,
+  pingInterval: 15000,
+  connectTimeout: 30000,
+  transports: ['websocket', 'polling'],
   allowUpgrades: true,
-  perMessageDeflate: false,   // disable compression for audio (already compressed)
+  perMessageDeflate: false,
   httpCompression: false,
-  // Memory optimization for many listeners
   serveClient: true,
   cookie: false
 });
@@ -30,19 +26,15 @@ const io = new Server(server, {
 const PORT = process.env.PORT || 3333;
 const IS_CLOUD = !!process.env.RENDER || !!process.env.RAILWAY_STATIC_URL || !!process.env.FLY_APP_NAME;
 let tunnelUrl = null;
+const MAX_CHANNELS = 10;
 
 // ========== AUTH & ADMIN SYSTEM ==========
 let adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
-const activeSessions = new Map(); // token → { expiry, role, label }
-const accessCodes = new Map();    // code → { label, createdAt, usedBy, maxUses, uses, expiresAt }
+const activeSessions = new Map();
+const accessCodes = new Map();
 
-function generateToken() {
-  return crypto.randomBytes(32).toString('hex');
-}
-
-function generateCode() {
-  return crypto.randomBytes(4).toString('hex').toUpperCase();
-}
+function generateToken() { return crypto.randomBytes(32).toString('hex'); }
+function generateCode() { return crypto.randomBytes(4).toString('hex').toUpperCase(); }
 
 function parseCookies(req) {
   return (req.headers.cookie || '').split(';').reduce((acc, c) => {
@@ -63,9 +55,7 @@ function getSession(req) {
   return session;
 }
 
-function isAuthenticated(req) {
-  return !!getSession(req);
-}
+function isAuthenticated(req) { return !!getSession(req); }
 
 function escapeHtml(str) {
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
@@ -76,7 +66,7 @@ function isAdmin(req) {
   return s && s.role === 'admin';
 }
 
-// Login page HTML — supports access code and admin login
+// Login page HTML
 function loginPageHTML(error = '', redirectTo = '/broadcaster') {
   redirectTo = escapeHtml(redirectTo);
   error = escapeHtml(error);
@@ -148,38 +138,132 @@ function loginPageHTML(error = '', redirectTo = '/broadcaster') {
 
 // ========== END AUTH ==========
 
-let stationInfo = {
-  name: 'SUBVERSIVE RADIO',
-  tagline: 'Broadcasting from the underground',
-  isLive: false,
-  listenerCount: 0,
-  currentTransmission: null
-};
+// ========== MULTI-CHANNEL SYSTEM ==========
+const channels = new Map();
 
-let transmissions = [];
+function createChannel(id, name) {
+  if (channels.has(id)) return channels.get(id);
+  const ch = {
+    id,
+    name: name || id.toUpperCase(),
+    stationInfo: {
+      name: name || 'SUBVERSIVE RADIO',
+      tagline: 'Broadcasting from the underground',
+      isLive: false,
+      listenerCount: 0,
+      currentTransmission: null,
+      channelId: id
+    },
+    broadcasterSocketId: null,
+    cohostSocketId: null,
+    cohostMicAllowed: false,
+    cohostAccessOpen: false,
+    djInputSocketId: null,
+    djInputAllowed: false,
+    djInputAccessOpen: false,
+    mutedUsers: new Set(),
+    transmissions: [],
+    streamClients: new Set(),
+    mp3Encoder: null,
+    mp3EncoderRate: 0
+  };
+  channels.set(id, ch);
+  return ch;
+}
 
-// Serve lamejs for client-side MP3 encoding
+// Create default channel
+createChannel('main', 'SUBVERSIVE RADIO');
+
+function getChannel(id) {
+  return channels.get(id || 'main');
+}
+
+function getChannelListenerCount(channelId) {
+  const room = io.sockets.adapter.rooms.get('listeners-' + channelId);
+  return room ? room.size : 0;
+}
+
+function getTotalListenerCount() {
+  let total = 0;
+  for (const [id] of channels) {
+    total += getChannelListenerCount(id);
+  }
+  return total;
+}
+
+// backward compat
+function getListenerCount() {
+  return getTotalListenerCount();
+}
+
+let transmissions = []; // kept for backward compat with main channel
+
+// ========== MP3 ENCODER ==========
+let Mp3Encoder = null;
+import('@breezystack/lamejs')
+  .then(m => { Mp3Encoder = m.Mp3Encoder; })
+  .catch(e => console.error('MP3 encoder failed to load — /stream disabled:', e.message));
+
+function getChannelMp3Encoder(ch) {
+  if (!Mp3Encoder) return null;
+  const rate = ch.stationInfo.sampleRate || 44100;
+  if (!ch.mp3Encoder || ch.mp3EncoderRate !== rate) {
+    ch.mp3Encoder = new Mp3Encoder(1, rate, 128);
+    ch.mp3EncoderRate = rate;
+  }
+  return ch.mp3Encoder;
+}
+
+function writeToChannelStreamClients(ch, data) {
+  if (!ch.streamClients.size) return;
+  let chunk;
+  try {
+    const enc = getChannelMp3Encoder(ch);
+    if (!enc) return;
+    let buf = Buffer.isBuffer(data) ? data : Buffer.from(data);
+    if (buf.byteOffset % 2 !== 0) buf = Buffer.from(buf);
+    const pcm = new Int16Array(buf.buffer, buf.byteOffset, buf.byteLength >> 1);
+    const mp3 = enc.encodeBuffer(pcm);
+    if (!mp3 || !mp3.length) return;
+    chunk = Buffer.from(mp3.buffer, mp3.byteOffset, mp3.byteLength);
+  } catch (e) {
+    console.error('MP3 encode error (chunk dropped):', e.message);
+    ch.mp3Encoder = null;
+    return;
+  }
+  for (const res of ch.streamClients) {
+    if (res.writableLength > 2 * 1024 * 1024) { res.destroy(); ch.streamClients.delete(res); continue; }
+    try { res.write(chunk); } catch (e) { ch.streamClients.delete(res); }
+  }
+}
+
+function flushChannelStreamClients(ch) {
+  if (!ch.mp3Encoder) return;
+  try {
+    const tail = ch.mp3Encoder.flush();
+    if (tail && tail.length) {
+      const chunk = Buffer.from(tail.buffer, tail.byteOffset, tail.byteLength);
+      for (const res of ch.streamClients) { try { res.write(chunk); } catch (e) {} }
+    }
+  } catch (e) {}
+  ch.mp3Encoder = null;
+}
+
+// ========== STATIC & MIDDLEWARE ==========
 app.get('/lamejs.js', (req, res) => {
   res.sendFile(path.join(__dirname, 'node_modules/@breezystack/lamejs/dist/lamejs.iife.js'));
 });
 
-// Serve static files with caching
-app.use(express.static(path.join(__dirname, 'public'), {
-  maxAge: '1h',
-  etag: true
-}));
+app.use(express.static(path.join(__dirname, 'public'), { maxAge: '1h', etag: true }));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // ========== AUTH ROUTES ==========
-
-// Login page
 app.get('/auth/login', (req, res) => {
   const redirect = req.query.redirect || '/broadcaster';
   res.send(loginPageHTML('', redirect));
 });
 
-// Login POST — handles both access code and admin login
 app.post('/auth/login', (req, res) => {
   const { mode, code, password, redirect } = req.body;
   const redirectTo = redirect || '/broadcaster';
@@ -196,15 +280,9 @@ app.post('/auth/login', (req, res) => {
   } else {
     const upperCode = (code || '').trim().toUpperCase();
     const entry = accessCodes.get(upperCode);
-    if (!entry) {
-      return res.send(loginPageHTML('Invalid access code.', redirectTo));
-    }
-    if (entry.expiresAt && Date.now() > entry.expiresAt) {
-      return res.send(loginPageHTML('This code has expired.', redirectTo));
-    }
-    if (entry.maxUses && entry.uses >= entry.maxUses) {
-      return res.send(loginPageHTML('This code has reached its use limit.', redirectTo));
-    }
+    if (!entry) return res.send(loginPageHTML('Invalid access code.', redirectTo));
+    if (entry.expiresAt && Date.now() > entry.expiresAt) return res.send(loginPageHTML('This code has expired.', redirectTo));
+    if (entry.maxUses && entry.uses >= entry.maxUses) return res.send(loginPageHTML('This code has reached its use limit.', redirectTo));
     entry.uses++;
     entry.lastUsed = new Date().toISOString();
     const token = generateToken();
@@ -214,7 +292,6 @@ app.post('/auth/login', (req, res) => {
   }
 });
 
-// Logout
 app.get('/auth/logout', (req, res) => {
   const cookies = parseCookies(req);
   if (cookies.br_token) activeSessions.delete(cookies.br_token);
@@ -222,23 +299,16 @@ app.get('/auth/logout', (req, res) => {
   res.redirect('/');
 });
 
-// Change admin password (admin only)
 app.post('/api/change-password', (req, res) => {
   if (!isAdmin(req)) return res.status(403).json({ error: 'Admin access required' });
   const { currentPassword, newPassword } = req.body;
-  if (currentPassword !== adminPassword) {
-    return res.status(403).json({ error: 'Current password is wrong' });
-  }
-  if (!newPassword || newPassword.length < 4) {
-    return res.status(400).json({ error: 'New password must be at least 4 characters' });
-  }
+  if (currentPassword !== adminPassword) return res.status(403).json({ error: 'Current password is wrong' });
+  if (!newPassword || newPassword.length < 4) return res.status(400).json({ error: 'New password must be at least 4 characters' });
   adminPassword = newPassword;
   res.json({ ok: true, message: 'Admin password changed' });
 });
 
 // ========== ADMIN API ==========
-
-// Create access code
 app.post('/api/admin/codes', (req, res) => {
   if (!isAdmin(req)) return res.status(403).json({ error: 'Admin only' });
   const { label, maxUses, expiresIn } = req.body;
@@ -254,7 +324,6 @@ app.post('/api/admin/codes', (req, res) => {
   res.json({ ok: true, code });
 });
 
-// List access codes
 app.get('/api/admin/codes', (req, res) => {
   if (!isAdmin(req)) return res.status(403).json({ error: 'Admin only' });
   const codes = [];
@@ -264,14 +333,12 @@ app.get('/api/admin/codes', (req, res) => {
   res.json(codes);
 });
 
-// Delete access code
 app.delete('/api/admin/codes/:code', (req, res) => {
   if (!isAdmin(req)) return res.status(403).json({ error: 'Admin only' });
   accessCodes.delete(req.params.code.toUpperCase());
   res.json({ ok: true });
 });
 
-// List active sessions
 app.get('/api/admin/sessions', (req, res) => {
   if (!isAdmin(req)) return res.status(403).json({ error: 'Admin only' });
   const sessions = [];
@@ -283,7 +350,6 @@ app.get('/api/admin/sessions', (req, res) => {
   res.json(sessions);
 });
 
-// Revoke all non-admin sessions
 app.post('/api/admin/revoke-all', (req, res) => {
   if (!isAdmin(req)) return res.status(403).json({ error: 'Admin only' });
   const adminTokens = [];
@@ -295,38 +361,79 @@ app.post('/api/admin/revoke-all', (req, res) => {
   res.json({ ok: true, message: 'All user sessions revoked' });
 });
 
-// ========== PROTECTED PAGES ==========
+// ========== CHANNEL API ==========
+app.get('/api/channels', (req, res) => {
+  const list = [];
+  for (const [id, ch] of channels) {
+    list.push({
+      id,
+      name: ch.name,
+      isLive: ch.stationInfo.isLive,
+      listeners: getChannelListenerCount(id),
+      hasBroadcaster: !!ch.broadcasterSocketId,
+      stationName: ch.stationInfo.name,
+      tagline: ch.stationInfo.tagline
+    });
+  }
+  res.json(list);
+});
 
+app.post('/api/channels', (req, res) => {
+  if (!isAdmin(req)) return res.status(403).json({ error: 'Admin only' });
+  if (channels.size >= MAX_CHANNELS) return res.status(400).json({ error: 'Max ' + MAX_CHANNELS + ' channels' });
+  const { name } = req.body;
+  if (!name || typeof name !== 'string') return res.status(400).json({ error: 'Channel name required' });
+  const id = name.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').slice(0, 30);
+  if (channels.has(id)) return res.status(400).json({ error: 'Channel already exists' });
+  createChannel(id, name);
+  res.json({ ok: true, id, name });
+});
+
+app.delete('/api/channels/:id', (req, res) => {
+  if (!isAdmin(req)) return res.status(403).json({ error: 'Admin only' });
+  const id = req.params.id;
+  if (id === 'main') return res.status(400).json({ error: 'Cannot delete main channel' });
+  const ch = channels.get(id);
+  if (!ch) return res.status(404).json({ error: 'Channel not found' });
+  if (ch.broadcasterSocketId) {
+    io.to(ch.broadcasterSocketId).emit('channel-deleted');
+  }
+  io.to('listeners-' + id).emit('station-offline');
+  channels.delete(id);
+  res.json({ ok: true });
+});
+
+// ========== PROTECTED PAGES ==========
 app.get('/admin', (req, res) => {
   if (!isAdmin(req)) return res.redirect('/auth/login?redirect=/admin');
   res.sendFile(path.join(__dirname, 'admin.html'));
 });
 
 app.get('/broadcaster', (req, res) => {
-  if (!isAuthenticated(req)) {
-    return res.redirect('/auth/login?redirect=/broadcaster');
-  }
+  if (!isAuthenticated(req)) return res.redirect('/auth/login?redirect=/broadcaster');
   res.sendFile(path.join(__dirname, 'broadcaster.html'));
 });
 
 app.get('/dj-input', (req, res) => {
-  if (!djInputAccessOpen) {
+  const channelId = req.query.channel || 'main';
+  const ch = getChannel(channelId);
+  if (!ch || !ch.djInputAccessOpen) {
     return res.status(403).send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DJ Input — Subversive Radio</title><style>*{margin:0;padding:0;box-sizing:border-box}body{background:#0a0a0a;color:#e0e0e0;font-family:-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;text-align:center;padding:20px}.msg{max-width:320px}.msg h1{font-size:14px;letter-spacing:3px;color:#ff3333;margin-bottom:16px}.msg p{font-size:13px;color:#666;line-height:1.6}</style></head><body><div class="msg"><h1>DJ INPUT CLOSED</h1><p>The host hasn't opened DJ input access yet. Ask them to enable it from the broadcaster panel.</p></div></body></html>`);
   }
   res.sendFile(path.join(__dirname, 'dj-input.html'));
 });
 
 app.get('/cohost', (req, res) => {
-  if (!cohostAccessOpen) {
+  const channelId = req.query.channel || 'main';
+  const ch = getChannel(channelId);
+  if (!ch || !ch.cohostAccessOpen) {
     return res.status(403).send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Co-Host — Subversive Radio</title><style>*{margin:0;padding:0;box-sizing:border-box}body{background:#0a0a0a;color:#e0e0e0;font-family:-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;text-align:center;padding:20px}.msg{max-width:320px}.msg h1{font-size:14px;letter-spacing:3px;color:#ff3333;margin-bottom:16px}.msg p{font-size:13px;color:#666;line-height:1.6}</style></head><body><div class="msg"><h1>CO-HOST ACCESS CLOSED</h1><p>The host hasn't opened co-host access yet. Ask them to enable it from the broadcaster panel.</p></div></body></html>`);
   }
   res.sendFile(path.join(__dirname, 'cohost.html'));
 });
 
 app.get('/download', (req, res) => {
-  if (!isAuthenticated(req)) {
-    return res.redirect('/auth/login?redirect=/download');
-  }
+  if (!isAuthenticated(req)) return res.redirect('/auth/login?redirect=/download');
   res.sendFile(path.join(__dirname, 'download.html'));
 });
 
@@ -342,25 +449,34 @@ app.get('/download/mac', (req, res) => {
 });
 
 app.get('/health', (req, res) => {
+  const channelStats = [];
+  for (const [id, ch] of channels) {
+    channelStats.push({ id, live: ch.stationInfo.isLive, listeners: getChannelListenerCount(id) });
+  }
   res.json({
     status: 'ok',
-    live: stationInfo.isLive,
-    listeners: getListenerCount(),
+    channels: channelStats,
+    totalListeners: getTotalListenerCount(),
     uptime: Math.floor(process.uptime()),
     memory: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + 'MB'
   });
 });
 
-// API
+// Station API — supports ?channel= query param
 app.get('/api/station', (req, res) => {
-  // On cloud, use the request host as the broadcast URL
+  const channelId = req.query.channel || 'main';
+  const ch = getChannel(channelId);
+  if (!ch) return res.status(404).json({ error: 'Channel not found' });
   const broadcastUrl = tunnelUrl || `${req.protocol}://${req.get('host')}`;
-  res.json({ ...stationInfo, tunnelUrl: broadcastUrl, listenerCount: getListenerCount() });
+  res.json({ ...ch.stationInfo, tunnelUrl: broadcastUrl, listenerCount: getChannelListenerCount(channelId) });
 });
 
 app.get('/api/transmissions', (req, res) => {
   if (!isAuthenticated(req)) return res.status(401).json({ error: 'Unauthorized' });
-  res.json(transmissions.map(t => ({
+  const channelId = req.query.channel || 'main';
+  const ch = getChannel(channelId);
+  if (!ch) return res.status(404).json({ error: 'Channel not found' });
+  res.json(ch.transmissions.map(t => ({
     id: t.id, title: t.title, duration: t.duration,
     createdAt: t.createdAt, played: t.played
   })));
@@ -368,28 +484,34 @@ app.get('/api/transmissions', (req, res) => {
 
 app.post('/api/transmissions', (req, res) => {
   if (!isAuthenticated(req)) return res.status(401).json({ error: 'Unauthorized' });
-  const { title, audioData, duration } = req.body;
+  const { title, audioData, duration, channel } = req.body;
+  const channelId = channel || 'main';
+  const ch = getChannel(channelId);
+  if (!ch) return res.status(404).json({ error: 'Channel not found' });
   if (!audioData || typeof audioData !== 'string') return res.status(400).json({ error: 'Missing audio data' });
   if (audioData.length > 40 * 1024 * 1024) return res.status(413).json({ error: 'Transmission too large (max 30MB)' });
   const transmission = {
     id: uuidv4(),
-    title: title || `Transmission #${transmissions.length + 1}`,
+    title: title || `Transmission #${ch.transmissions.length + 1}`,
     audioData, duration,
     createdAt: new Date().toISOString(),
     played: 0
   };
-  transmissions.push(transmission);
-  io.to('broadcaster').emit('transmissions-updated', transmissions.length);
+  ch.transmissions.push(transmission);
+  io.to('broadcaster-' + channelId).emit('transmissions-updated', ch.transmissions.length);
   res.json({ id: transmission.id });
 });
 
 app.delete('/api/transmissions/:id', (req, res) => {
   if (!isAuthenticated(req)) return res.status(401).json({ error: 'Unauthorized' });
-  transmissions = transmissions.filter(t => t.id !== req.params.id);
+  const channelId = req.query.channel || 'main';
+  const ch = getChannel(channelId);
+  if (!ch) return res.status(404).json({ error: 'Channel not found' });
+  ch.transmissions = ch.transmissions.filter(t => t.id !== req.params.id);
   res.json({ ok: true });
 });
 
-// Audio stream proxy — bypasses CORS for radio streams
+// Stream proxy
 app.get('/api/stream-proxy', (req, res) => {
   if (!isAuthenticated(req)) return res.status(401).json({ error: 'Unauthorized' });
   const streamUrl = req.query.url;
@@ -400,96 +522,33 @@ app.get('/api/stream-proxy', (req, res) => {
     if (upstream.statusCode >= 300 && upstream.statusCode < 400 && upstream.headers.location) {
       return res.redirect('/api/stream-proxy?url=' + encodeURIComponent(upstream.headers.location));
     }
-    if (upstream.statusCode !== 200) {
-      return res.status(502).json({ error: 'Stream returned ' + upstream.statusCode });
-    }
+    if (upstream.statusCode !== 200) return res.status(502).json({ error: 'Stream returned ' + upstream.statusCode });
     res.setHeader('Content-Type', upstream.headers['content-type'] || 'audio/mpeg');
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Cache-Control', 'no-cache');
     upstream.pipe(res);
     req.on('close', () => upstream.destroy());
   });
-  request.on('error', (e) => {
-    if (!res.headersSent) res.status(502).json({ error: 'Stream unreachable' });
-  });
-  request.setTimeout(10000, () => {
-    request.destroy();
-    if (!res.headersSent) res.status(504).json({ error: 'Stream timeout' });
-  });
+  request.on('error', (e) => { if (!res.headersSent) res.status(502).json({ error: 'Stream unreachable' }); });
+  request.setTimeout(10000, () => { request.destroy(); if (!res.headersSent) res.status(504).json({ error: 'Stream timeout' }); });
 });
 
-// HTTP live stream — endless MP3 of the broadcast, playable in a plain <audio> tag
-// everywhere including Safari/iOS (which can't play endless WAV). WordPress.com
-// strips scripts/iframes but allows <audio src>, so this is the only way to
-// embed the station directly on wearebornfree.de.
-const streamClients = new Set();
-let Mp3Encoder = null;
-import('@breezystack/lamejs')
-  .then(m => { Mp3Encoder = m.Mp3Encoder; })
-  .catch(e => console.error('MP3 encoder failed to load — /stream disabled:', e.message));
-
-let mp3Encoder = null;
-let mp3EncoderRate = 0;
-
-function getMp3Encoder() {
-  if (!Mp3Encoder) return null;
-  const rate = stationInfo.sampleRate || 44100;
-  if (!mp3Encoder || mp3EncoderRate !== rate) {
-    mp3Encoder = new Mp3Encoder(1, rate, 128); // mono, 128 kbps
-    mp3EncoderRate = rate;
-  }
-  return mp3Encoder;
-}
-
-app.get('/stream', (req, res) => {
+// Per-channel MP3 stream: /stream or /stream/main or /stream/reggae etc.
+app.get('/stream/:channelId?', (req, res) => {
+  const channelId = req.params.channelId || 'main';
+  const ch = getChannel(channelId);
+  if (!ch) return res.status(404).end('Channel not found');
   res.writeHead(200, {
     'Content-Type': 'audio/mpeg',
     'Cache-Control': 'no-cache, no-store',
     'Access-Control-Allow-Origin': '*',
     'Connection': 'keep-alive',
   });
-  streamClients.add(res);
-  req.on('close', () => streamClients.delete(res));
+  ch.streamClients.add(res);
+  req.on('close', () => ch.streamClients.delete(res));
 });
 
-function writeToStreamClients(data) {
-  if (!streamClients.size) return;
-  let chunk;
-  try {
-    const enc = getMp3Encoder();
-    if (!enc) return;
-    let buf = Buffer.isBuffer(data) ? data : Buffer.from(data);
-    if (buf.byteOffset % 2 !== 0) buf = Buffer.from(buf); // Int16Array needs 2-byte alignment
-    const pcm = new Int16Array(buf.buffer, buf.byteOffset, buf.byteLength >> 1);
-    const mp3 = enc.encodeBuffer(pcm);
-    if (!mp3 || !mp3.length) return;
-    chunk = Buffer.from(mp3.buffer, mp3.byteOffset, mp3.byteLength);
-  } catch (e) {
-    // A malformed chunk must never take down the station — reset the encoder
-    console.error('MP3 encode error (chunk dropped):', e.message);
-    mp3Encoder = null;
-    return;
-  }
-  for (const res of streamClients) {
-    // Drop clients that can't keep up instead of buffering audio in memory
-    if (res.writableLength > 2 * 1024 * 1024) { res.destroy(); streamClients.delete(res); continue; }
-    try { res.write(chunk); } catch (e) { streamClients.delete(res); }
-  }
-}
-
-function flushStreamClients() {
-  if (!mp3Encoder) return;
-  try {
-    const tail = mp3Encoder.flush();
-    if (tail && tail.length) {
-      const chunk = Buffer.from(tail.buffer, tail.byteOffset, tail.byteLength);
-      for (const res of streamClients) { try { res.write(chunk); } catch (e) {} }
-    }
-  } catch (e) {}
-  mp3Encoder = null; // fresh encoder for the next show
-}
-
-// Embeddable mini player
+// Embeddable mini player — supports ?channel=
 app.get('/embed', (req, res) => {
   res.setHeader('X-Frame-Options', 'ALLOWALL');
   res.setHeader('Content-Security-Policy', '');
@@ -498,6 +557,7 @@ app.get('/embed', (req, res) => {
 
 function embedPlayerHTML(req) {
   const host = `${req.protocol}://${req.get('host')}`;
+  const channelId = req.query.channel || 'main';
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -540,9 +600,10 @@ body{font-family:'SF Mono','Courier New',monospace;background:#0a0a0a;color:#e0e
 <script src="${host}/socket.io/socket.io.js"></script>
 <script>
 const SERVER='${host}';
+const CHANNEL='${channelId}';
 let socket,player=null,isListening=false,isLive=false,vol=1;
 
-fetch(SERVER+'/api/station').then(r=>r.json()).then(d=>{
+fetch(SERVER+'/api/station?channel='+CHANNEL).then(r=>r.json()).then(d=>{
   document.getElementById('stName').textContent=d.name||'SUBVERSIVE RADIO';
   document.getElementById('stTag').textContent=d.tagline||'';
   if(d.isLive){isLive=true;goLive();}
@@ -550,7 +611,7 @@ fetch(SERVER+'/api/station').then(r=>r.json()).then(d=>{
 }).catch(()=>{});
 
 socket=io(SERVER,{transports:['websocket','polling']});
-socket.on('connect',()=>{socket.emit('join-listener');});
+socket.on('connect',()=>{socket.emit('join-listener',{channel:CHANNEL});});
 socket.on('station-live',d=>{isLive=true;goLive();});
 socket.on('station-offline',()=>{isLive=false;goOff();if(isListening)toggle();});
 socket.on('station-info',d=>{if(d&&d.isLive&&!isLive){isLive=true;goLive();}});
@@ -571,7 +632,7 @@ function toggle(){
   const btn=document.getElementById('playBtn');
   if(!isListening){
     if(!isLive)return;
-    player=new Audio(SERVER+'/stream');
+    player=new Audio(SERVER+'/stream/'+CHANNEL);
     player.volume=vol;
     player.play().catch(()=>{});
     isListening=true;
@@ -590,288 +651,340 @@ function setVol(v){vol=parseFloat(v);if(player)player.volume=vol;}
 </html>`;
 }
 
-function getListenerCount() {
-  const listeners = io.sockets.adapter.rooms.get('listeners');
-  return listeners ? listeners.size : 0;
-}
-
-// ========== SOCKET.IO — OPTIMIZED FOR 100+ LISTENERS ==========
-let broadcasterSocketId = null;
-let cohostSocketId = null;
-let cohostMicAllowed = false;
-let cohostAccessOpen = false;
-let djInputSocketId = null;
-let djInputAllowed = false;
-let djInputAccessOpen = false;
-const mutedUsers = new Set();
-
+// ========== SOCKET.IO — MULTI-CHANNEL ==========
 
 io.on('connection', (socket) => {
-  const clientIp = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
   let isBroadcaster = false;
   let isCoHost = false;
   let isListener = false;
+  let isDjInput = false;
+  let myChannelId = null;
 
-  // BROADCASTER
-  socket.on('join-broadcaster', () => {
-    socket.join('broadcaster');
+  function myChannel() { return getChannel(myChannelId); }
+
+  // BROADCASTER — now includes channelId
+  socket.on('join-broadcaster', (opts) => {
+    const channelId = (opts && opts.channel) || 'main';
+    const ch = getChannel(channelId);
+    if (!ch) return socket.emit('error-msg', 'Channel not found');
+
+    socket.join('broadcaster-' + channelId);
     isBroadcaster = true;
-    broadcasterSocketId = socket.id;
-    console.log('🎙️  Broadcaster connected');
-    socket.emit('listener-count', getListenerCount());
+    myChannelId = channelId;
+    ch.broadcasterSocketId = socket.id;
+    console.log(`🎙️  Broadcaster connected to [${channelId}]`);
+    socket.emit('listener-count', getChannelListenerCount(channelId));
+    socket.emit('channel-joined', { channelId, channelName: ch.name });
     const url = tunnelUrl || `http://${socket.handshake.headers.host}`;
     socket.emit('tunnel-url', url);
   });
 
-  // CO-HOST — remote mic controlled by host
+  // CO-HOST
   socket.on('join-cohost', (info) => {
+    const channelId = (info && info.channel) || 'main';
+    const ch = getChannel(channelId);
+    if (!ch) return;
+
     isCoHost = true;
-    cohostSocketId = socket.id;
-    cohostMicAllowed = false;
+    myChannelId = channelId;
+    ch.cohostSocketId = socket.id;
+    ch.cohostMicAllowed = false;
     const name = (info && info.name) ? info.name.slice(0, 20) : 'Co-Host';
-    console.log('🎙️  Co-host connected:', name);
-    socket.emit('listener-count', getListenerCount());
-    socket.emit('station-info', stationInfo);
+    console.log(`🎙️  Co-host connected to [${channelId}]:`, name);
+    socket.emit('listener-count', getChannelListenerCount(channelId));
+    socket.emit('station-info', ch.stationInfo);
     socket.emit('cohost-mic-state', false);
-    // Notify broadcaster directly (not via room, to avoid co-host receiving it)
-    if (broadcasterSocketId) {
-      io.to(broadcasterSocketId).emit('cohost-joined', { id: socket.id, name });
+    if (ch.broadcasterSocketId) {
+      io.to(ch.broadcasterSocketId).emit('cohost-joined', { id: socket.id, name });
     }
   });
 
   socket.on('cohost-access-toggle', (open) => {
     if (!isBroadcaster) return;
-    cohostAccessOpen = !!open;
-    console.log('🎙️  Co-host access:', cohostAccessOpen ? 'OPEN' : 'CLOSED');
-    if (!cohostAccessOpen && cohostSocketId) {
-      io.to(cohostSocketId).emit('cohost-kicked');
-      cohostSocketId = null;
-      cohostMicAllowed = false;
-      io.to(broadcasterSocketId).emit('cohost-left');
+    const ch = myChannel();
+    if (!ch) return;
+    ch.cohostAccessOpen = !!open;
+    console.log(`🎙️  Co-host access [${myChannelId}]:`, ch.cohostAccessOpen ? 'OPEN' : 'CLOSED');
+    if (!ch.cohostAccessOpen && ch.cohostSocketId) {
+      io.to(ch.cohostSocketId).emit('cohost-kicked');
+      ch.cohostSocketId = null;
+      ch.cohostMicAllowed = false;
+      io.to(ch.broadcasterSocketId).emit('cohost-left');
     }
   });
 
   socket.on('cohost-mic-toggle', (allowed) => {
     if (!isBroadcaster) return;
-    cohostMicAllowed = !!allowed;
-    if (cohostSocketId) {
-      io.to(cohostSocketId).emit('cohost-mic-state', cohostMicAllowed);
+    const ch = myChannel();
+    if (!ch) return;
+    ch.cohostMicAllowed = !!allowed;
+    if (ch.cohostSocketId) {
+      io.to(ch.cohostSocketId).emit('cohost-mic-state', ch.cohostMicAllowed);
     }
   });
 
-  // DJ INPUT — remote audio source (iPad DJ, another computer, etc.)
-  let isDjInput = false;
-
+  // DJ INPUT
   socket.on('join-dj-input', (info) => {
+    const channelId = (info && info.channel) || 'main';
+    const ch = getChannel(channelId);
+    if (!ch) return;
+
     isDjInput = true;
-    djInputSocketId = socket.id;
-    djInputAllowed = false;
+    myChannelId = channelId;
+    ch.djInputSocketId = socket.id;
+    ch.djInputAllowed = false;
     const name = (info && info.name) ? info.name.slice(0, 20) : 'DJ Input';
-    console.log('🎧  DJ input connected:', name);
+    console.log(`🎧  DJ input connected to [${channelId}]:`, name);
     socket.emit('dj-input-state', false);
-    if (broadcasterSocketId) {
-      io.to(broadcasterSocketId).emit('dj-input-joined', { id: socket.id, name });
+    if (ch.broadcasterSocketId) {
+      io.to(ch.broadcasterSocketId).emit('dj-input-joined', { id: socket.id, name });
     }
   });
 
   socket.on('dj-input-access-toggle', (open) => {
     if (!isBroadcaster) return;
-    djInputAccessOpen = !!open;
-    console.log('🎧  DJ input access:', djInputAccessOpen ? 'OPEN' : 'CLOSED');
-    if (!djInputAccessOpen && djInputSocketId) {
-      io.to(djInputSocketId).emit('dj-input-kicked');
-      djInputSocketId = null;
-      djInputAllowed = false;
-      io.to(broadcasterSocketId).emit('dj-input-left');
+    const ch = myChannel();
+    if (!ch) return;
+    ch.djInputAccessOpen = !!open;
+    console.log(`🎧  DJ input access [${myChannelId}]:`, ch.djInputAccessOpen ? 'OPEN' : 'CLOSED');
+    if (!ch.djInputAccessOpen && ch.djInputSocketId) {
+      io.to(ch.djInputSocketId).emit('dj-input-kicked');
+      ch.djInputSocketId = null;
+      ch.djInputAllowed = false;
+      io.to(ch.broadcasterSocketId).emit('dj-input-left');
     }
   });
 
   socket.on('dj-input-toggle', (allowed) => {
     if (!isBroadcaster) return;
-    djInputAllowed = !!allowed;
-    if (djInputSocketId) {
-      io.to(djInputSocketId).emit('dj-input-state', djInputAllowed);
+    const ch = myChannel();
+    if (!ch) return;
+    ch.djInputAllowed = !!allowed;
+    if (ch.djInputSocketId) {
+      io.to(ch.djInputSocketId).emit('dj-input-state', ch.djInputAllowed);
     }
   });
 
-  // LISTENER
-  socket.on('join-listener', () => {
-    socket.join('listeners');
+  // LISTENER — now includes channelId
+  socket.on('join-listener', (opts) => {
+    const channelId = (opts && opts.channel) || 'main';
+    const ch = getChannel(channelId);
+    if (!ch) return;
+
+    // Leave any previous channel
+    if (myChannelId && myChannelId !== channelId) {
+      socket.leave('listeners-' + myChannelId);
+      const oldCh = getChannel(myChannelId);
+      if (oldCh) {
+        const oldCount = getChannelListenerCount(myChannelId);
+        io.to('broadcaster-' + myChannelId).emit('listener-count', oldCount);
+      }
+    }
+
+    socket.join('listeners-' + channelId);
     isListener = true;
-    const count = getListenerCount();
-    console.log(`👤 Listener joined (${count} total)`);
-    io.to('broadcaster').emit('listener-count', count);
-    socket.emit('station-info', stationInfo);
+    myChannelId = channelId;
+    const count = getChannelListenerCount(channelId);
+    console.log(`👤 Listener joined [${channelId}] (${count} total)`);
+    io.to('broadcaster-' + channelId).emit('listener-count', count);
+    socket.emit('station-info', ch.stationInfo);
+    socket.emit('channel-joined', { channelId, channelName: ch.name });
   });
 
-  // AUDIO STREAM — co-host and DJ audio route through broadcaster's AudioContext
+  // AUDIO STREAM — routed per channel
   socket.on('audio-stream', (data) => {
+    if (!myChannelId) return;
+    const ch = myChannel();
+    if (!ch) return;
+
     if (!isBroadcaster && !isCoHost && !isDjInput) return;
-    if (isCoHost && !cohostMicAllowed) return;
-    if (isDjInput && !djInputAllowed) return;
+    if (isCoHost && !ch.cohostMicAllowed) return;
+    if (isDjInput && !ch.djInputAllowed) return;
 
     if (isCoHost) {
-      if (broadcasterSocketId) {
-        io.to(broadcasterSocketId).volatile.emit('cohost-audio', data);
+      if (ch.broadcasterSocketId) {
+        io.to(ch.broadcasterSocketId).volatile.emit('cohost-audio', data);
       }
       return;
     }
 
     if (isDjInput) {
-      if (broadcasterSocketId) {
-        io.to(broadcasterSocketId).volatile.emit('dj-input-audio', data);
+      if (ch.broadcasterSocketId) {
+        io.to(ch.broadcasterSocketId).volatile.emit('dj-input-audio', data);
       }
       return;
     }
 
-    // Broadcaster audio — send directly to listeners (already includes co-host via AudioContext)
-    io.to('listeners').volatile.emit('audio-stream', data);
-    writeToStreamClients(data);
+    // Broadcaster audio — send to this channel's listeners only
+    io.to('listeners-' + myChannelId).volatile.emit('audio-stream', data);
+    writeToChannelStreamClients(ch, data);
   });
 
-  // STATION CONTROLS
+  // STATION CONTROLS — per channel
   socket.on('go-live', (info) => {
-    stationInfo.isLive = true;
+    if (!myChannelId) return;
+    const ch = myChannel();
+    if (!ch) return;
+    ch.stationInfo.isLive = true;
     if (info) {
-      stationInfo.name = info.name || stationInfo.name;
-      stationInfo.tagline = info.tagline || stationInfo.tagline;
-      stationInfo.sampleRate = info.sampleRate || 22050;
+      ch.stationInfo.name = info.name || ch.stationInfo.name;
+      ch.stationInfo.tagline = info.tagline || ch.stationInfo.tagline;
+      ch.stationInfo.sampleRate = info.sampleRate || 44100;
     }
-    io.to('listeners').emit('station-live', stationInfo);
-    console.log(`🔴 LIVE: ${stationInfo.name} (${getListenerCount()} listeners)`);
+    io.to('listeners-' + myChannelId).emit('station-live', ch.stationInfo);
+    console.log(`🔴 LIVE [${myChannelId}]: ${ch.stationInfo.name} (${getChannelListenerCount(myChannelId)} listeners)`);
   });
 
   socket.on('go-offline', () => {
-    stationInfo.isLive = false;
-    stationInfo.currentTransmission = null;
-    io.to('listeners').emit('station-offline');
-    flushStreamClients();
-    console.log('⭕ Station offline');
+    if (!myChannelId) return;
+    const ch = myChannel();
+    if (!ch) return;
+    ch.stationInfo.isLive = false;
+    ch.stationInfo.currentTransmission = null;
+    io.to('listeners-' + myChannelId).emit('station-offline');
+    flushChannelStreamClients(ch);
+    console.log(`⭕ [${myChannelId}] Station offline`);
   });
 
   socket.on('play-transmission', (id) => {
-    const t = transmissions.find(tr => tr.id === id);
+    if (!myChannelId) return;
+    const ch = myChannel();
+    if (!ch) return;
+    const t = ch.transmissions.find(tr => tr.id === id);
     if (t) {
       t.played++;
-      stationInfo.currentTransmission = t.title;
-      io.to('listeners').emit('transmission-start', {
+      ch.stationInfo.currentTransmission = t.title;
+      io.to('listeners-' + myChannelId).emit('transmission-start', {
         title: t.title, audioData: t.audioData, duration: t.duration
       });
-      io.to('broadcaster').emit('transmission-playing', t.id);
+      io.to('broadcaster-' + myChannelId).emit('transmission-playing', t.id);
     }
   });
 
   socket.on('transmission-ended', () => {
-    stationInfo.currentTransmission = null;
-    io.to('listeners').emit('transmission-end');
+    if (!myChannelId) return;
+    const ch = myChannel();
+    if (!ch) return;
+    ch.stationInfo.currentTransmission = null;
+    io.to('listeners-' + myChannelId).emit('transmission-end');
   });
 
   socket.on('update-station', (info) => {
-    stationInfo.name = info.name || stationInfo.name;
-    stationInfo.tagline = info.tagline || stationInfo.tagline;
-    io.to('listeners').emit('station-info', stationInfo);
+    if (!myChannelId) return;
+    const ch = myChannel();
+    if (!ch) return;
+    ch.stationInfo.name = info.name || ch.stationInfo.name;
+    ch.stationInfo.tagline = info.tagline || ch.stationInfo.tagline;
+    io.to('listeners-' + myChannelId).emit('station-info', ch.stationInfo);
   });
 
-  // LIVE CHAT
+  // LIVE CHAT — per channel
   socket.on('chat-message', (msg) => {
+    if (!myChannelId) return;
+    const ch = myChannel();
+    if (!ch) return;
     if (!msg || !msg.text || typeof msg.text !== 'string') return;
     const text = msg.text.trim().slice(0, 500);
     if (!text) return;
     const from = (isBroadcaster || isCoHost) ? 'DJ' : (msg.name || 'Listener').slice(0, 20);
-    if (mutedUsers.has(from)) return;
+    if (ch.mutedUsers.has(from)) return;
     const chatMsg = {
       id: Date.now() + '-' + Math.random().toString(36).slice(2, 6),
-      text,
-      from,
+      text, from,
       isDJ: isBroadcaster || isCoHost,
       time: new Date().toISOString()
     };
-    io.to('listeners').emit('chat-message', chatMsg);
-    io.to('broadcaster').emit('chat-message', chatMsg);
+    io.to('listeners-' + myChannelId).emit('chat-message', chatMsg);
+    io.to('broadcaster-' + myChannelId).emit('chat-message', chatMsg);
   });
 
   socket.on('chat-pin', (msgId) => {
-    if (!isBroadcaster) return;
-    io.to('listeners').emit('chat-pin', msgId);
+    if (!isBroadcaster || !myChannelId) return;
+    io.to('listeners-' + myChannelId).emit('chat-pin', msgId);
   });
 
   socket.on('chat-delete', (msgId) => {
-    if (!isBroadcaster) return;
-    io.to('listeners').emit('chat-delete', msgId);
-    io.to('broadcaster').emit('chat-delete', msgId);
+    if (!isBroadcaster || !myChannelId) return;
+    io.to('listeners-' + myChannelId).emit('chat-delete', msgId);
+    io.to('broadcaster-' + myChannelId).emit('chat-delete', msgId);
   });
 
   socket.on('chat-mute', (userName) => {
-    if (!isBroadcaster) return;
-    mutedUsers.add(userName);
-    io.to('broadcaster').emit('chat-muted', userName);
+    if (!isBroadcaster || !myChannelId) return;
+    const ch = myChannel();
+    if (ch) ch.mutedUsers.add(userName);
+    io.to('broadcaster-' + myChannelId).emit('chat-muted', userName);
   });
 
   socket.on('chat-unmute', (userName) => {
-    if (!isBroadcaster) return;
-    mutedUsers.delete(userName);
-    io.to('broadcaster').emit('chat-unmuted', userName);
+    if (!isBroadcaster || !myChannelId) return;
+    const ch = myChannel();
+    if (ch) ch.mutedUsers.delete(userName);
+    io.to('broadcaster-' + myChannelId).emit('chat-unmuted', userName);
   });
 
   socket.on('chat-clear', () => {
-    if (!isBroadcaster) return;
-    io.to('listeners').emit('chat-clear');
-    io.to('broadcaster').emit('chat-clear');
+    if (!isBroadcaster || !myChannelId) return;
+    io.to('listeners-' + myChannelId).emit('chat-clear');
+    io.to('broadcaster-' + myChannelId).emit('chat-clear');
   });
 
-  socket.on('disconnect', (reason) => {
+  // DISCONNECT — clean up channel state
+  socket.on('disconnect', () => {
+    if (!myChannelId) return;
+    const ch = myChannel();
+    if (!ch) return;
+
     if (isListener) {
-      const count = getListenerCount();
-      io.to('broadcaster').emit('listener-count', count);
+      const count = getChannelListenerCount(myChannelId);
+      io.to('broadcaster-' + myChannelId).emit('listener-count', count);
     }
-    if (isBroadcaster && broadcasterSocketId === socket.id) {
-      stationInfo.isLive = false;
-      broadcasterSocketId = null;
-      io.to('listeners').emit('station-offline');
-      console.log('🎙️  Broadcaster disconnected');
+    if (isBroadcaster && ch.broadcasterSocketId === socket.id) {
+      ch.stationInfo.isLive = false;
+      ch.broadcasterSocketId = null;
+      io.to('listeners-' + myChannelId).emit('station-offline');
+      console.log(`🎙️  Broadcaster disconnected from [${myChannelId}]`);
     }
-    if (isCoHost && cohostSocketId === socket.id) {
-      cohostSocketId = null;
-      cohostMicAllowed = false;
-      if (broadcasterSocketId) {
-        io.to(broadcasterSocketId).emit('cohost-left');
+    if (isCoHost && ch.cohostSocketId === socket.id) {
+      ch.cohostSocketId = null;
+      ch.cohostMicAllowed = false;
+      if (ch.broadcasterSocketId) {
+        io.to(ch.broadcasterSocketId).emit('cohost-left');
       }
-      console.log('🎙️  Co-host disconnected');
+      console.log(`🎙️  Co-host disconnected from [${myChannelId}]`);
     }
-    if (isDjInput && djInputSocketId === socket.id) {
-      djInputSocketId = null;
-      djInputAllowed = false;
-      if (broadcasterSocketId) {
-        io.to(broadcasterSocketId).emit('dj-input-left');
+    if (isDjInput && ch.djInputSocketId === socket.id) {
+      ch.djInputSocketId = null;
+      ch.djInputAllowed = false;
+      if (ch.broadcasterSocketId) {
+        io.to(ch.broadcasterSocketId).emit('dj-input-left');
       }
-      console.log('🎧  DJ input disconnected');
+      console.log(`🎧  DJ input disconnected from [${myChannelId}]`);
     }
   });
 
-  // Handle connection errors gracefully
   socket.on('error', (err) => {
     console.error(`Socket error (${socket.id}):`, err.message);
   });
 });
 
 // ========== MEMORY CLEANUP ==========
-// Clean up old transmissions to prevent memory leak (keep last 20)
 setInterval(() => {
-  if (transmissions.length > 20) {
-    transmissions = transmissions.slice(-20);
-    console.log('🧹 Cleaned old transmissions');
+  for (const [id, ch] of channels) {
+    if (ch.transmissions.length > 20) {
+      ch.transmissions = ch.transmissions.slice(-20);
+    }
   }
 
-  // Clean expired sessions
   for (const [token, session] of activeSessions) {
     if (Date.now() > session.expiry) activeSessions.delete(token);
   }
 
-  // Log stats
   const mem = Math.round(process.memoryUsage().heapUsed / 1024 / 1024);
-  const listeners = getListenerCount();
-  if (listeners > 0 || stationInfo.isLive) {
-    console.log(`📊 Listeners: ${listeners} | Memory: ${mem}MB | Live: ${stationInfo.isLive}`);
+  const total = getTotalListenerCount();
+  const liveChannels = [...channels.values()].filter(ch => ch.stationInfo.isLive);
+  if (total > 0 || liveChannels.length > 0) {
+    console.log(`📊 Channels: ${channels.size} | Live: ${liveChannels.length} | Listeners: ${total} | Memory: ${mem}MB`);
   }
 }, 60000);
 
@@ -885,10 +998,7 @@ function startTunnel() {
 
   if (fs.existsSync(localBin)) cfPath = localBin;
   else if (fs.existsSync(tmpBin)) cfPath = tmpBin;
-  else {
-    console.log('⚠️  cloudflared not found — no public link');
-    return;
-  }
+  else { console.log('⚠️  cloudflared not found — no public link'); return; }
 
   console.log('🔗 Opening tunnel...');
   const cf = spawn(cfPath, ['tunnel', '--url', `http://localhost:${PORT}`], {
@@ -903,23 +1013,22 @@ function startTunnel() {
       tunnelUrl = match[0];
       console.log(`\n🔴 BROADCAST: ${tunnelUrl}`);
       console.log(`🎙️  STUDIO:    ${tunnelUrl}/broadcaster\n`);
-      io.to('broadcaster').emit('tunnel-url', tunnelUrl);
+      for (const [id] of channels) {
+        io.to('broadcaster-' + id).emit('tunnel-url', tunnelUrl);
+      }
     }
   }
   cf.stdout.on('data', checkOutput);
   cf.stderr.on('data', checkOutput);
-  cf.on('close', () => {
-    tunnelUrl = null;
-    tunnelRetryDelay = Math.min(tunnelRetryDelay * 2, 60000);
-    setTimeout(startTunnel, tunnelRetryDelay);
-  });
+  cf.on('close', () => { tunnelUrl = null; tunnelRetryDelay = Math.min(tunnelRetryDelay * 2, 60000); setTimeout(startTunnel, tunnelRetryDelay); });
   cf.on('error', (err) => console.error('Tunnel error:', err.message));
 }
 
 // ========== START ==========
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n📡 Subversive Radio v1.0 — optimized for 100+ listeners`);
+  console.log(`\n📡 Subversive Radio v2.0 — Multi-Channel`);
   console.log(`   Port: ${PORT}`);
+  console.log(`   Channels: ${channels.size} (max ${MAX_CHANNELS})`);
   console.log(`   🔑 Admin: password set (${adminPassword.length} chars)`);
   if (IS_CLOUD) {
     console.log('   ☁️  Cloud mode (no tunnel needed)');

@@ -196,12 +196,13 @@
     let allowed = false;
     let connected = false;
     let djSampleRate = 44100;
+    const djChannel = new URLSearchParams(window.location.search).get('channel') || 'main';
 
     // Socket events
     socket.on('connect', () => {
       connected = true;
       document.getElementById('connDot').classList.add('ok');
-      socket.emit('join-dj-input', { name: 'iPad DJ' });
+      socket.emit('join-dj-input', { name: 'iPad DJ', channel: djChannel });
       updateStatus();
     });
 
@@ -217,7 +218,7 @@
     });
 
     socket.on('reconnect', () => {
-      socket.emit('join-dj-input', { name: 'iPad DJ' });
+      socket.emit('join-dj-input', { name: 'iPad DJ', channel: djChannel });
     });
 
     socket.on('dj-input-kicked', () => {

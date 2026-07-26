@@ -974,6 +974,11 @@
         <div class="on-air-badge" id="onAirBadge">OFF AIR</div>
       </div>
       <div class="header-stats">
+        <span style="display:flex;align-items:center;gap:4px">
+          CH <select id="channelSelect" style="background:#1e1e1e;border:1px solid #333;border-radius:4px;color:var(--green);font-family:inherit;font-size:10px;padding:2px 6px;cursor:pointer" onchange="switchChannel(this.value)">
+            <option value="main">MAIN</option>
+          </select>
+        </span>
         <span>LISTENERS <span class="count" id="listenerCount">0</span></span>
         <span>TRANSMISSIONS <span class="count" id="transmissionCount">0</span></span>
       </div>
@@ -1612,7 +1617,44 @@
   <script src="/lamejs.js"></script>
   <script>
     const SERVER = window.location.origin;
+    const urlParams = new URLSearchParams(window.location.search);
+    let currentChannel = urlParams.get('channel') || 'main';
     const socket = io(SERVER);
+
+    // Load available channels into dropdown
+    async function loadChannels() {
+      try {
+        const res = await fetch('/api/channels');
+        const list = await res.json();
+        const sel = document.getElementById('channelSelect');
+        sel.innerHTML = '';
+        list.forEach(ch => {
+          const opt = document.createElement('option');
+          opt.value = ch.id;
+          opt.textContent = ch.name + (ch.isLive ? ' [LIVE]' : '') + (ch.hasBroadcaster && ch.id !== currentChannel ? ' [TAKEN]' : '');
+          if (ch.id === currentChannel) opt.selected = true;
+          sel.appendChild(opt);
+        });
+      } catch (e) {}
+    }
+    loadChannels();
+    setInterval(loadChannels, 15000);
+
+    function switchChannel(channelId) {
+      if (channelId === currentChannel) return;
+      if (isLive) {
+        if (!confirm('You are ON AIR. Switching channels will take you offline. Continue?')) {
+          document.getElementById('channelSelect').value = currentChannel;
+          return;
+        }
+      }
+      currentChannel = channelId;
+      const newUrl = new URL(window.location);
+      if (channelId === 'main') newUrl.searchParams.delete('channel');
+      else newUrl.searchParams.set('channel', channelId);
+      window.history.replaceState({}, '', newUrl);
+      window.location.reload();
+    }
 
     let isLive = false;
     let audioContext, mediaStream, sourceNode, analyserNode, gainNode, processorNode;
@@ -1668,7 +1710,7 @@
 
     // Socket events
     socket.on('connect', () => {
-      socket.emit('join-broadcaster');
+      socket.emit('join-broadcaster', { channel: currentChannel });
       document.getElementById('statusDot').classList.add('connected');
       document.getElementById('statusText').textContent = 'Connected to server';
       // If we were live before a disconnect (e.g. server restart), re-announce
