@@ -286,8 +286,12 @@ app.post('/auth/login', (req, res) => {
     entry.uses++;
     entry.lastUsed = new Date().toISOString();
     const token = generateToken();
-    activeSessions.set(token, { expiry: Date.now() + 24 * 60 * 60 * 1000, role: 'user', label: entry.label || upperCode });
+    activeSessions.set(token, { expiry: Date.now() + 24 * 60 * 60 * 1000, role: 'user', label: entry.label || upperCode, channel: entry.channel || null });
     res.setHeader('Set-Cookie', `br_token=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400`);
+    // If code is locked to a channel, redirect to that channel's broadcaster
+    if (entry.channel && redirectTo === '/broadcaster') {
+      return res.redirect('/broadcaster?channel=' + encodeURIComponent(entry.channel));
+    }
     res.redirect(redirectTo);
   }
 });
@@ -311,7 +315,7 @@ app.post('/api/change-password', (req, res) => {
 // ========== ADMIN API ==========
 app.post('/api/admin/codes', (req, res) => {
   if (!isAdmin(req)) return res.status(403).json({ error: 'Admin only' });
-  const { label, maxUses, expiresIn } = req.body;
+  const { label, maxUses, expiresIn, channel } = req.body;
   const code = generateCode();
   accessCodes.set(code, {
     label: label || 'Guest',
@@ -319,7 +323,8 @@ app.post('/api/admin/codes', (req, res) => {
     maxUses: maxUses || 0,
     uses: 0,
     expiresAt: expiresIn ? Date.now() + expiresIn * 60 * 60 * 1000 : null,
-    lastUsed: null
+    lastUsed: null,
+    channel: channel || null
   });
   res.json({ ok: true, code });
 });
@@ -460,6 +465,13 @@ app.get('/health', (req, res) => {
     uptime: Math.floor(process.uptime()),
     memory: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + 'MB'
   });
+});
+
+// Current user's session info (used by broadcaster to check channel lock)
+app.get('/api/me', (req, res) => {
+  const session = getSession(req);
+  if (!session) return res.status(401).json({ error: 'Not authenticated' });
+  res.json({ role: session.role, label: session.label, channel: session.channel || null });
 });
 
 // Station API — supports ?channel= query param

@@ -105,6 +105,12 @@
           </select>
         </div>
         <div class="form-field">
+          <label>Lock to Channel</label>
+          <select id="codeChannel">
+            <option value="">Any channel</option>
+          </select>
+        </div>
+        <div class="form-field">
           <label>Expires In</label>
           <select id="codeExpires">
             <option value="0">Never</option>
@@ -162,13 +168,14 @@
       const label = document.getElementById('codeLabel').value.trim();
       const maxUses = parseInt(document.getElementById('codeMaxUses').value);
       const expiresIn = parseInt(document.getElementById('codeExpires').value);
+      const channel = document.getElementById('codeChannel').value || null;
       const status = document.getElementById('createStatus');
 
       try {
         const res = await fetch(`${SERVER}/api/admin/codes`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ label: label || 'Guest', maxUses, expiresIn })
+          body: JSON.stringify({ label: label || 'Guest', maxUses, expiresIn, channel })
         });
         const data = await res.json();
         if (data.ok) {
@@ -202,7 +209,7 @@
               <span class="code-value ${isExpired ? 'expired' : ''}" onclick="copyCode('${c.code}')" title="Click to copy">${c.code}</span>
               <div class="code-meta">
                 <span>${c.label}</span>
-                <span>Uses: ${c.uses}${c.maxUses ? '/' + c.maxUses : '/∞'}${c.lastUsed ? ' · Last: ' + new Date(c.lastUsed).toLocaleString() : ''}${isExpired ? ' · EXPIRED' : ''}</span>
+                <span>Uses: ${c.uses}${c.maxUses ? '/' + c.maxUses : '/∞'}${c.channel ? ' · Ch: ' + c.channel : ''}${c.lastUsed ? ' · Last: ' + new Date(c.lastUsed).toLocaleString() : ''}${isExpired ? ' · EXPIRED' : ''}</span>
               </div>
               <div class="code-actions">
                 <button class="btn btn-sm" onclick="copyCode('${c.code}')">Copy</button>
@@ -291,6 +298,11 @@
         if (list.length === 0) {
           el.innerHTML = '<div class="empty">No channels</div>';
           return;
+        }
+        const channelDropdown = document.getElementById('codeChannel');
+        if (channelDropdown) {
+          channelDropdown.innerHTML = '<option value="">Any channel</option>' +
+            list.map(ch => `<option value="${ch.id}">${escapeHtml(ch.name)}</option>`).join('');
         }
         el.innerHTML = list.map(ch => `
           <div class="code-item">

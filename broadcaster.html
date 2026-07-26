@@ -1637,7 +1637,21 @@
         });
       } catch (e) {}
     }
-    loadChannels();
+    let lockedChannel = null;
+
+    // Check if user is locked to a specific channel
+    fetch('/api/me').then(r => r.json()).then(me => {
+      if (me.channel) {
+        lockedChannel = me.channel;
+        currentChannel = me.channel;
+        const sel = document.getElementById('channelSelect');
+        sel.disabled = true;
+        sel.title = 'Your access code is locked to this channel';
+        sel.style.opacity = '0.6';
+      }
+      loadChannels();
+    }).catch(() => { loadChannels(); });
+
     setInterval(loadChannels, 15000);
 
     function switchChannel(channelId) {
