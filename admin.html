@@ -71,6 +71,22 @@
       </div>
     </div>
 
+    <!-- CHANNELS -->
+    <div class="section">
+      <h2>📡 Channels</h2>
+      <div class="create-form">
+        <div class="form-field" style="flex:1;min-width:150px">
+          <label>Channel Name</label>
+          <input type="text" id="channelName" placeholder="e.g. Reggae, Hip Hop, Jazz" maxlength="30">
+        </div>
+        <button class="btn" onclick="createChannel()">Create Channel</button>
+      </div>
+      <div id="channelStatus" class="status-msg"></div>
+      <div id="channelList" class="code-list" style="margin-top:16px">
+        <div class="empty">Loading...</div>
+      </div>
+    </div>
+
     <!-- CREATE ACCESS CODE -->
     <div class="section">
       <h2>Create Access Code</h2>
@@ -266,8 +282,98 @@
       }
     }
 
+    // CHANNEL MANAGEMENT
+    async function loadChannels() {
+      try {
+        const res = await fetch(`${SERVER}/api/channels`);
+        const list = await res.json();
+        const el = document.getElementById('channelList');
+        if (list.length === 0) {
+          el.innerHTML = '<div class="empty">No channels</div>';
+          return;
+        }
+        el.innerHTML = list.map(ch => `
+          <div class="code-item">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="font-size:14px;font-weight:bold;color:${ch.isLive ? 'var(--green)' : 'var(--text)'};letter-spacing:2px">${ch.isLive ? '●' : '○'} ${escapeHtml(ch.name)}</span>
+            </div>
+            <div class="code-meta">
+              <span>ID: ${ch.id} · Listeners: ${ch.listeners}${ch.hasBroadcaster ? ' · DJ online' : ''}${ch.isLive ? ' · LIVE' : ''}</span>
+            </div>
+            <div class="code-actions">
+              <button class="btn btn-sm" onclick="copyChannelLink('${ch.id}')" title="Copy listener link">Link</button>
+              <button class="btn btn-sm" onclick="copyBroadcasterLink('${ch.id}')" title="Copy broadcaster link" style="border-color:var(--green);color:var(--green)">DJ Link</button>
+              ${ch.id !== 'main' ? `<button class="btn btn-red btn-sm" onclick="deleteChannel('${ch.id}')">✕</button>` : ''}
+            </div>
+          </div>
+        `).join('');
+      } catch (e) {
+        document.getElementById('channelList').innerHTML = '<div class="empty">Failed to load channels</div>';
+      }
+    }
+
+    async function createChannel() {
+      const name = document.getElementById('channelName').value.trim();
+      const status = document.getElementById('channelStatus');
+      if (!name) { status.className = 'status-msg error'; status.textContent = 'Enter a channel name'; return; }
+      try {
+        const res = await fetch(`${SERVER}/api/channels`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name })
+        });
+        const data = await res.json();
+        if (data.ok) {
+          status.className = 'status-msg success';
+          status.textContent = `Channel "${data.name || name}" created (ID: ${data.id})`;
+          document.getElementById('channelName').value = '';
+          loadChannels();
+        } else {
+          status.className = 'status-msg error';
+          status.textContent = data.error;
+        }
+      } catch (e) {
+        status.className = 'status-msg error';
+        status.textContent = 'Failed to create channel';
+      }
+    }
+
+    async function deleteChannel(id) {
+      if (!confirm('Delete channel "' + id + '"? Any active broadcast will be stopped.')) return;
+      try {
+        await fetch(`${SERVER}/api/channels/${id}`, { method: 'DELETE' });
+        loadChannels();
+      } catch (e) {}
+    }
+
+    function copyChannelLink(id) {
+      const base = window.location.origin;
+      const url = id === 'main' ? base + '/' : base + '/?channel=' + id;
+      navigator.clipboard.writeText(url).then(() => {
+        const status = document.getElementById('channelStatus');
+        status.className = 'status-msg success';
+        status.textContent = 'Listener link copied: ' + url;
+        setTimeout(() => { status.className = 'status-msg'; }, 3000);
+      });
+    }
+
+    function copyBroadcasterLink(id) {
+      const base = window.location.origin;
+      const url = id === 'main' ? base + '/broadcaster' : base + '/broadcaster?channel=' + id;
+      navigator.clipboard.writeText(url).then(() => {
+        const status = document.getElementById('channelStatus');
+        status.className = 'status-msg success';
+        status.textContent = 'Broadcaster link copied: ' + url;
+        setTimeout(() => { status.className = 'status-msg'; }, 3000);
+      });
+    }
+
+    function escapeHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    loadChannels();
     loadCodes();
     loadSessions();
+    setInterval(loadChannels, 10000);
     setInterval(loadSessions, 30000);
   </script>
 </body>
