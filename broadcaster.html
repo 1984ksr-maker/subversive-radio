@@ -2889,8 +2889,14 @@
       const btn = document.getElementById('micMuteBtn');
 
       if (micMuted) {
-        // Mute: set mic gain to 0, music keeps flowing through limiter
+        // Mute: kill gain AND disable the actual mic hardware track
         if (gainNode) gainNode.gain.value = 0;
+        if (mediaStream) {
+          mediaStream.getAudioTracks().forEach(t => { t.enabled = false; });
+        }
+        if (sourceNode) {
+          try { sourceNode.disconnect(); } catch(e) {}
+        }
         btn.textContent = '🔇 MIC OFF';
         btn.classList.add('muted');
 
@@ -2913,7 +2919,13 @@
           }
         }
       } else {
-        // Unmute: restore mic gain
+        // Unmute: re-enable mic track and reconnect source
+        if (mediaStream) {
+          mediaStream.getAudioTracks().forEach(t => { t.enabled = true; });
+        }
+        if (sourceNode && highPassFilter) {
+          try { sourceNode.connect(highPassFilter); } catch(e) {}
+        }
         const db = parseFloat(document.getElementById('inputGain').value);
         const mixVol = parseFloat(document.getElementById('micMixVol').value);
         if (gainNode) gainNode.gain.value = dbToGain(db) * mixVol;
