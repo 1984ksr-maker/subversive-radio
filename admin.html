@@ -52,6 +52,15 @@
 
     .pw-form { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
 
+    .radio-section { margin-top: 12px; padding: 14px 16px; background: var(--bg); border: 1px solid #222; border-radius: 8px; }
+    .radio-label { font-size: 11px; color: var(--amber); font-weight: bold; letter-spacing: 1px; margin-bottom: 8px; }
+    .radio-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .radio-row input { flex: 1; min-width: 180px; padding: 8px 10px; background: var(--surface2); border: 1px solid #333; border-radius: 6px; color: var(--text); font-family: inherit; font-size: 11px; outline: none; }
+    .radio-row input:focus { border-color: var(--amber); }
+    .radio-status { font-size: 10px; margin-top: 6px; }
+    .radio-status .active { color: var(--green); }
+    .radio-status .inactive { color: var(--text-dim); }
+
     @media (max-width: 600px) {
       .create-form, .pw-form { flex-direction: column; }
       .form-field { width: 100%; }
@@ -305,17 +314,38 @@
             list.map(ch => `<option value="${ch.id}">${escapeHtml(ch.name)}</option>`).join('');
         }
         el.innerHTML = list.map(ch => `
-          <div class="code-item">
-            <div style="display:flex;align-items:center;gap:10px">
-              <span style="font-size:14px;font-weight:bold;color:${ch.isLive ? 'var(--green)' : 'var(--text)'};letter-spacing:2px">${ch.isLive ? '●' : '○'} ${escapeHtml(ch.name)}</span>
+          <div class="code-item" style="flex-direction:column;align-items:stretch">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+              <div style="display:flex;align-items:center;gap:10px">
+                <span style="font-size:14px;font-weight:bold;color:${ch.isLive ? 'var(--green)' : 'var(--text)'};letter-spacing:2px">${ch.isLive ? '●' : '○'} ${escapeHtml(ch.name)}</span>
+              </div>
+              <div class="code-meta" style="flex:1">
+                <span>ID: ${ch.id} · Listeners: ${ch.listeners}${ch.hasBroadcaster ? ' · DJ online' : ''}${ch.isLive ? ' · LIVE' : ''}${ch.serverRadioActive ? ' · SERVER RADIO' : ''}</span>
+              </div>
+              <div class="code-actions">
+                <button class="btn btn-sm" onclick="copyChannelLink('${ch.id}')" title="Copy listener link">Link</button>
+                <button class="btn btn-sm" onclick="copyBroadcasterLink('${ch.id}')" title="Copy broadcaster link" style="border-color:var(--green);color:var(--green)">DJ Link</button>
+                ${ch.id !== 'main' ? `<button class="btn btn-red btn-sm" onclick="deleteChannel('${ch.id}')">✕</button>` : ''}
+              </div>
             </div>
-            <div class="code-meta">
-              <span>ID: ${ch.id} · Listeners: ${ch.listeners}${ch.hasBroadcaster ? ' · DJ online' : ''}${ch.isLive ? ' · LIVE' : ''}</span>
-            </div>
-            <div class="code-actions">
-              <button class="btn btn-sm" onclick="copyChannelLink('${ch.id}')" title="Copy listener link">Link</button>
-              <button class="btn btn-sm" onclick="copyBroadcasterLink('${ch.id}')" title="Copy broadcaster link" style="border-color:var(--green);color:var(--green)">DJ Link</button>
-              ${ch.id !== 'main' ? `<button class="btn btn-red btn-sm" onclick="deleteChannel('${ch.id}')">✕</button>` : ''}
+            <div class="radio-section">
+              <div class="radio-label">SERVER RADIO (AUTOPILOT)</div>
+              <div class="radio-row">
+                <input type="text" id="radio-url-${ch.id}" placeholder="Stream URL (e.g. https://stream.example.com/live)" value="${ch.serverRadioUrl ? escapeHtml(ch.serverRadioUrl) : ''}">
+                ${ch.serverRadioActive
+                  ? `<button class="btn btn-red btn-sm" onclick="stopServerRadio('${ch.id}')">Stop</button>`
+                  : `<button class="btn btn-sm" onclick="startServerRadio('${ch.id}')" style="border-color:var(--green);color:var(--green)">Start</button>`
+                }
+                <button class="btn btn-sm" onclick="saveServerRadioUrl('${ch.id}')">Save URL</button>
+              </div>
+              <div class="radio-status">
+                ${ch.serverRadioActive
+                  ? '<span class="active">● Autopilot active — streaming to listeners</span>'
+                  : ch.serverRadioUrl
+                    ? '<span class="inactive">○ URL saved — will auto-start when no broadcaster is online</span>'
+                    : '<span class="inactive">○ No URL set</span>'
+                }
+              </div>
             </div>
           </div>
         `).join('');
@@ -378,6 +408,77 @@
         status.textContent = 'Broadcaster link copied: ' + url;
         setTimeout(() => { status.className = 'status-msg'; }, 3000);
       });
+    }
+
+    async function saveServerRadioUrl(channelId) {
+      const url = document.getElementById('radio-url-' + channelId).value.trim();
+      const status = document.getElementById('channelStatus');
+      try {
+        const res = await fetch(`${SERVER}/api/server-radio`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ channel: channelId, url: url, start: false })
+        });
+        const data = await res.json();
+        if (data.ok) {
+          status.className = 'status-msg success';
+          status.textContent = url ? `Server radio URL saved for ${channelId}` : `Server radio URL cleared for ${channelId}`;
+          loadChannels();
+        } else {
+          status.className = 'status-msg error';
+          status.textContent = data.error;
+        }
+      } catch (e) {
+        status.className = 'status-msg error';
+        status.textContent = 'Failed to save server radio URL';
+      }
+      setTimeout(() => { status.className = 'status-msg'; }, 3000);
+    }
+
+    async function startServerRadio(channelId) {
+      const url = document.getElementById('radio-url-' + channelId).value.trim();
+      const status = document.getElementById('channelStatus');
+      if (!url) { status.className = 'status-msg error'; status.textContent = 'Enter a stream URL first'; setTimeout(() => { status.className = 'status-msg'; }, 3000); return; }
+      try {
+        const res = await fetch(`${SERVER}/api/server-radio`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ channel: channelId, url: url, start: true })
+        });
+        const data = await res.json();
+        if (data.ok) {
+          status.className = 'status-msg success';
+          status.textContent = `Server radio started on ${channelId}`;
+          loadChannels();
+        } else {
+          status.className = 'status-msg error';
+          status.textContent = data.error;
+        }
+      } catch (e) {
+        status.className = 'status-msg error';
+        status.textContent = 'Failed to start server radio';
+      }
+      setTimeout(() => { status.className = 'status-msg'; }, 3000);
+    }
+
+    async function stopServerRadio(channelId) {
+      const status = document.getElementById('channelStatus');
+      try {
+        const res = await fetch(`${SERVER}/api/server-radio/${channelId}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.ok) {
+          status.className = 'status-msg success';
+          status.textContent = `Server radio stopped on ${channelId}`;
+          loadChannels();
+        } else {
+          status.className = 'status-msg error';
+          status.textContent = data.error;
+        }
+      } catch (e) {
+        status.className = 'status-msg error';
+        status.textContent = 'Failed to stop server radio';
+      }
+      setTimeout(() => { status.className = 'status-msg'; }, 3000);
     }
 
     function escapeHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }

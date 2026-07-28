@@ -165,10 +165,80 @@ function createChannel(id, name) {
     transmissions: [],
     streamClients: new Set(),
     mp3Encoder: null,
-    mp3EncoderRate: 0
+    mp3EncoderRate: 0,
+    serverRadioUrl: null,
+    serverRadioProcess: null
   };
   channels.set(id, ch);
   return ch;
+}
+
+// ========== SERVER RADIO (autopilot) ==========
+function startServerRadio(ch) {
+  if (!ch.serverRadioUrl || ch.serverRadioProcess) return;
+  if (ch.broadcasterSocketId) return; // broadcaster is live, don't start
+  const url = ch.serverRadioUrl;
+  const rate = ch.stationInfo.sampleRate || 44100;
+
+  console.log(`📻 Server radio starting on [${ch.id}]: ${url}`);
+  const proc = spawn('ffmpeg', [
+    '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5',
+    '-i', url,
+    '-f', 's16le', '-acodec', 'pcm_s16le', '-ac', '1', '-ar', String(rate),
+    '-v', 'error',
+    'pipe:1'
+  ]);
+
+  ch.serverRadioProcess = proc;
+  ch.stationInfo.isLive = true;
+  ch.stationInfo.serverRadio = true;
+  io.to('listeners-' + ch.id).emit('station-live', ch.stationInfo);
+
+  proc.stdout.on('data', (data) => {
+    if (ch.serverRadioProcess !== proc) return;
+    io.to('listeners-' + ch.id).volatile.emit('audio-stream', data);
+    writeToChannelStreamClients(ch, data);
+  });
+
+  proc.stderr.on('data', (data) => {
+    const msg = data.toString().trim();
+    if (msg) console.error(`📻 Server radio [${ch.id}] ffmpeg:`, msg);
+  });
+
+  proc.on('close', (code) => {
+    if (ch.serverRadioProcess !== proc) return;
+    ch.serverRadioProcess = null;
+    console.log(`📻 Server radio stopped on [${ch.id}] (code ${code})`);
+    // Auto-restart after 5s if no broadcaster and URL still set
+    if (ch.serverRadioUrl && !ch.broadcasterSocketId) {
+      ch.stationInfo.isLive = false;
+      ch.stationInfo.serverRadio = false;
+      io.to('listeners-' + ch.id).emit('station-offline');
+      setTimeout(() => {
+        if (ch.serverRadioUrl && !ch.broadcasterSocketId && !ch.serverRadioProcess) {
+          startServerRadio(ch);
+        }
+      }, 5000);
+    } else {
+      ch.stationInfo.isLive = false;
+      ch.stationInfo.serverRadio = false;
+      io.to('listeners-' + ch.id).emit('station-offline');
+    }
+  });
+
+  proc.on('error', (err) => {
+    console.error(`📻 Server radio [${ch.id}] spawn error:`, err.message);
+    ch.serverRadioProcess = null;
+  });
+}
+
+function stopServerRadio(ch) {
+  if (!ch.serverRadioProcess) return;
+  console.log(`📻 Server radio stopping on [${ch.id}]`);
+  const proc = ch.serverRadioProcess;
+  ch.serverRadioProcess = null;
+  ch.stationInfo.serverRadio = false;
+  try { proc.kill('SIGTERM'); } catch(e) {}
 }
 
 // Create default channel
@@ -377,7 +447,9 @@ app.get('/api/channels', (req, res) => {
       listeners: getChannelListenerCount(id),
       hasBroadcaster: !!ch.broadcasterSocketId,
       stationName: ch.stationInfo.name,
-      tagline: ch.stationInfo.tagline
+      tagline: ch.stationInfo.tagline,
+      serverRadioUrl: ch.serverRadioUrl || null,
+      serverRadioActive: !!ch.serverRadioProcess
     });
   }
   res.json(list);
@@ -400,11 +472,50 @@ app.delete('/api/channels/:id', (req, res) => {
   if (id === 'main') return res.status(400).json({ error: 'Cannot delete main channel' });
   const ch = channels.get(id);
   if (!ch) return res.status(404).json({ error: 'Channel not found' });
+  stopServerRadio(ch);
   if (ch.broadcasterSocketId) {
     io.to(ch.broadcasterSocketId).emit('channel-deleted');
   }
   io.to('listeners-' + id).emit('station-offline');
   channels.delete(id);
+  res.json({ ok: true });
+});
+
+// ========== SERVER RADIO API ==========
+app.post('/api/server-radio', (req, res) => {
+  if (!isAdmin(req)) return res.status(403).json({ error: 'Admin only' });
+  const { channel, url, start } = req.body;
+  const channelId = channel || 'main';
+  const ch = getChannel(channelId);
+  if (!ch) return res.status(404).json({ error: 'Channel not found' });
+  if (url === '' || url === null || url === undefined) {
+    stopServerRadio(ch);
+    ch.serverRadioUrl = null;
+    return res.json({ ok: true, channel: channelId, url: null, active: false });
+  }
+  if (typeof url !== 'string' || !url.startsWith('http')) {
+    return res.status(400).json({ error: 'Valid stream URL required' });
+  }
+  stopServerRadio(ch);
+  ch.serverRadioUrl = url.trim();
+  if (start !== false) {
+    startServerRadio(ch);
+  }
+  res.json({ ok: true, channel: channelId, url: ch.serverRadioUrl, active: !!ch.serverRadioProcess });
+});
+
+app.delete('/api/server-radio/:channel?', (req, res) => {
+  if (!isAdmin(req)) return res.status(403).json({ error: 'Admin only' });
+  const channelId = req.params.channel || 'main';
+  const ch = getChannel(channelId);
+  if (!ch) return res.status(404).json({ error: 'Channel not found' });
+  stopServerRadio(ch);
+  if (!ch.broadcasterSocketId) {
+    ch.stationInfo.isLive = false;
+    ch.stationInfo.serverRadio = false;
+    io.to('listeners-' + channelId).emit('station-offline');
+    flushChannelStreamClients(ch);
+  }
   res.json({ ok: true });
 });
 
@@ -861,7 +972,10 @@ io.on('connection', (socket) => {
     if (!isBroadcaster || !myChannelId) return;
     const ch = myChannel();
     if (!ch) return;
+    // Stop server radio — live broadcaster takes over
+    stopServerRadio(ch);
     ch.stationInfo.isLive = true;
+    ch.stationInfo.serverRadio = false;
     if (info) {
       ch.stationInfo.name = info.name || ch.stationInfo.name;
       ch.stationInfo.tagline = info.tagline || ch.stationInfo.tagline;
@@ -880,6 +994,10 @@ io.on('connection', (socket) => {
     io.to('listeners-' + myChannelId).emit('station-offline');
     flushChannelStreamClients(ch);
     console.log(`⭕ [${myChannelId}] Station offline`);
+    // Resume server radio if configured
+    if (ch.serverRadioUrl) {
+      setTimeout(() => startServerRadio(ch), 1000);
+    }
   });
 
   socket.on('play-transmission', (id) => {
@@ -980,6 +1098,10 @@ io.on('connection', (socket) => {
       ch.broadcasterSocketId = null;
       io.to('listeners-' + myChannelId).emit('station-offline');
       console.log(`🎙️  Broadcaster disconnected from [${myChannelId}]`);
+      // Resume server radio if configured
+      if (ch.serverRadioUrl) {
+        setTimeout(() => startServerRadio(ch), 2000);
+      }
     }
     if (isCoHost && ch.cohostSocketId === socket.id) {
       ch.cohostSocketId = null;
