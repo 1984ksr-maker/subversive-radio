@@ -332,20 +332,34 @@
               <div class="radio-label">SERVER RADIO (AUTOPILOT)</div>
               <div class="radio-row">
                 <select onchange="pickRadioPreset(this,'${ch.id}')" style="padding:8px 10px;background:var(--surface2);border:1px solid #333;border-radius:6px;color:var(--text);font-family:inherit;font-size:11px;outline:none;min-width:140px">
-                  <option value="">-- Pick a station --</option>
-                  <option value="https://stream.laut.fm/lofi">Lo-Fi Beats</option>
-                  <option value="https://stream.laut.fm/jazz">Jazz FM</option>
-                  <option value="https://stream.laut.fm/electronica">Electronica</option>
-                  <option value="https://stream.laut.fm/dub">Dub Radio</option>
-                  <option value="https://stream.laut.fm/soul">Soul Station</option>
-                  <option value="https://stream.laut.fm/hiphop">Hip Hop</option>
-                  <option value="https://stream.laut.fm/classicrock">Classic Rock</option>
-                  <option value="https://stream.laut.fm/ambient">Ambient</option>
-                  <option value="http://stream.rynothebearded.com:8000/music-320.mp3">RynoTheBearded</option>
-                  <option value="https://stream.laut.fm/tangoargentino">Tango Argentino</option>
-                  <option value="https://stream.laut.fm/techno">Techno</option>
-                  <option value="https://stream.laut.fm/drumandbass">Drum & Bass</option>
-                  <option value="https://stream.laut.fm/reggae">Reggae</option>
+                  <option value="">-- Free stations --</option>
+                  <optgroup label="SomaFM (listener-supported)">
+                    <option value="https://ice1.somafm.com/groovesalad-128-mp3">Groove Salad — ambient / downtempo</option>
+                    <option value="https://ice1.somafm.com/dronezone-128-mp3">Drone Zone — atmospheric textures</option>
+                    <option value="https://ice1.somafm.com/defcon-128-mp3">DEF CON Radio — dark electronic</option>
+                    <option value="https://ice1.somafm.com/beatblender-128-mp3">Beat Blender — deep house / breaks</option>
+                    <option value="https://ice1.somafm.com/fluid-128-mp3">Fluid — instrumental hip hop</option>
+                    <option value="https://ice1.somafm.com/deepspaceone-128-mp3">Deep Space One — deep ambient</option>
+                    <option value="https://ice1.somafm.com/seventies-128-mp3">Left Coast 70s — 70s classics</option>
+                    <option value="https://ice1.somafm.com/thistle-128-mp3">ThistleRadio — celtic / folk</option>
+                  </optgroup>
+                  <optgroup label="Creative Commons">
+                    <option value="http://stream.rynothebearded.com:8000/music-320.mp3">RynoTheBearded — CC rock / indie</option>
+                  </optgroup>
+                  <optgroup label="laut.fm (free platform)">
+                    <option value="https://stream.laut.fm/lofi">Lo-Fi Beats — chill / study</option>
+                    <option value="https://stream.laut.fm/jazz">Jazz FM — smooth jazz</option>
+                    <option value="https://stream.laut.fm/electronica">Electronica — electronic / ambient</option>
+                    <option value="https://stream.laut.fm/dub">Dub Radio — dub / reggae</option>
+                    <option value="https://stream.laut.fm/soul">Soul Station — soul / funk</option>
+                    <option value="https://stream.laut.fm/hiphop">Hip Hop — rap / hip hop</option>
+                    <option value="https://stream.laut.fm/classicrock">Classic Rock — rock legends</option>
+                    <option value="https://stream.laut.fm/ambient">Ambient — soundscapes / chill</option>
+                    <option value="https://stream.laut.fm/techno">Techno — techno / minimal</option>
+                    <option value="https://stream.laut.fm/drumandbass">Drum &amp; Bass — dnb / jungle</option>
+                    <option value="https://stream.laut.fm/reggae">Reggae — roots / dancehall</option>
+                    <option value="https://stream.laut.fm/tangoargentino">Tango Argentino — tango / latin</option>
+                  </optgroup>
                 </select>
                 <input type="text" id="radio-url-${ch.id}" placeholder="Or paste custom stream URL..." value="${ch.serverRadioUrl ? escapeHtml(ch.serverRadioUrl) : ''}">
                 ${ch.serverRadioActive
