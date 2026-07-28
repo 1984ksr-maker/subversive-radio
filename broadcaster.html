@@ -1936,13 +1936,7 @@
           musicAudioElement.src = '';
           musicAudioElement = null;
         }
-        if (radioAudioElement) {
-          radioAudioElement.pause();
-          radioAudioElement.src = '';
-          radioAudioElement = null;
-          radioSourceNode = null;
-          radioGainNode = null;
-        }
+        radioStreamActive = false;
 
         document.getElementById('statusText').textContent =
           mode === 'mic' ? 'Source: Microphone — click GO LIVE' :
@@ -2192,7 +2186,7 @@
           }
 
           // Check which sources are active
-          const musicPlaying = (musicAudioElement && !musicAudioElement.paused) || (radioAudioElement && !radioAudioElement.paused);
+          const musicPlaying = (musicAudioElement && !musicAudioElement.paused);
           const captureActive = !!systemAudioSource;
           const cohostOn = cohostActive;
           const hasCohostAudio = cohostPcmQueue.length > 0;
@@ -2330,7 +2324,6 @@
 
       // Reconnect all other audio sources to limiterNode (they were dropped by disconnect)
       if (musicGainNode) { try { musicGainNode.connect(limiterNode); } catch(e) {} }
-      if (radioGainNode) { try { radioGainNode.connect(limiterNode); } catch(e) {} }
       if (systemAudioGain) { try { systemAudioGain.connect(limiterNode); } catch(e) {} }
       if (extConnected && extInputPanner) {
         try { extInputPanner.connect(limiterNode); } catch(e) {}
@@ -2365,21 +2358,9 @@
         setMeter('vuMic', 'vuPeakMic', 'dbMic', maxMic, peakMic, dbMicVal);
 
         // MUSIC — dynamically connect when source nodes become available
-        // Track which node is connected so we can switch when source changes
         if (!musicAnalyserConnected) {
-          if (radioGainNode) { try { radioGainNode.connect(musicAnalyser); musicAnalyserConnected = true; musicAnalyserSource = 'radio'; } catch(e) {} }
-          else if (musicGainNode) { try { musicGainNode.connect(musicAnalyser); musicAnalyserConnected = true; musicAnalyserSource = 'music'; } catch(e) {} }
+          if (musicGainNode) { try { musicGainNode.connect(musicAnalyser); musicAnalyserConnected = true; musicAnalyserSource = 'music'; } catch(e) {} }
           else if (extInputGain) { try { extInputGain.connect(musicAnalyser); musicAnalyserConnected = true; musicAnalyserSource = 'ext'; } catch(e) {} }
-        } else {
-          // Reconnect if source changed (e.g. switched from file to radio stream)
-          if (radioGainNode && musicAnalyserSource !== 'radio') {
-            try { if (musicGainNode) musicGainNode.disconnect(musicAnalyser); } catch(e) {}
-            try { if (extInputGain) extInputGain.disconnect(musicAnalyser); } catch(e) {}
-            try { radioGainNode.connect(musicAnalyser); musicAnalyserSource = 'radio'; } catch(e) {}
-          } else if (!radioGainNode && musicGainNode && musicAnalyserSource !== 'music') {
-            try { radioGainNode && radioGainNode.disconnect(musicAnalyser); } catch(e) {}
-            try { musicGainNode.connect(musicAnalyser); musicAnalyserSource = 'music'; } catch(e) {}
-          }
         }
         if (musicAnalyserConnected) {
           musicAnalyser.getFloatTimeDomainData(musicBuf);
@@ -3176,6 +3157,7 @@
     }
 
     function onTrackEnded() {
+      if (radioStreamActive) return;
       if (isLooping) {
         musicAudioElement.currentTime = 0;
         musicAudioElement.play();
@@ -3235,11 +3217,6 @@
         musicGainNode.gain.setValueAtTime(musicGainNode.gain.value, now);
         smoothGain(musicGainNode.gain, val);
       }
-      if (radioGainNode) {
-        radioGainNode.gain.cancelScheduledValues(now);
-        radioGainNode.gain.setValueAtTime(radioGainNode.gain.value, now);
-        smoothGain(radioGainNode.gain, val);
-      }
       if (systemAudioGain) {
         systemAudioGain.gain.cancelScheduledValues(now);
         systemAudioGain.gain.setValueAtTime(systemAudioGain.gain.value, now);
@@ -3287,9 +3264,8 @@
       }
     }
 
-    let radioAudioElement = null;
-    let radioSourceNode = null;
-    let radioGainNode = null;
+    let radioStreamActive = false;
+    let radioStreamName = '';
 
     async function playRadioStream(url, name) {
       if (!url || !url.trim()) return;
@@ -3303,23 +3279,27 @@
       if (!audioContext) return;
       if (audioContext.state === 'suspended') audioContext.resume();
 
-      radioAudioElement = new Audio();
-      radioAudioElement.crossOrigin = 'anonymous';
-      radioAudioElement.src = SERVER + '/api/stream-proxy?url=' + encodeURIComponent(url);
+      // Route radio through the music player's audio element + source node
+      // This reuses the single MediaElementSource which works reliably on Safari
+      if (!musicAudioElement) {
+        musicAudioElement = new Audio();
+        musicAudioElement.addEventListener('timeupdate', updateMusicProgress);
+        musicAudioElement.addEventListener('ended', onTrackEnded);
+      }
+      musicAudioElement.src = SERVER + '/api/stream-proxy?url=' + encodeURIComponent(url);
+      connectMusicToChain();
 
-      radioSourceNode = audioContext.createMediaElementSource(radioAudioElement);
-      radioGainNode = audioContext.createGain();
-      radioGainNode.gain.value = parseFloat(document.getElementById('musicVolume').value);
-      radioSourceNode.connect(radioGainNode);
-      radioGainNode.connect(limiterNode);
+      radioStreamActive = true;
+      radioStreamName = name;
 
       try {
-        await radioAudioElement.play();
+        await musicAudioElement.play();
         document.getElementById('radioNowPlaying').style.display = 'block';
         document.getElementById('radioPlayingName').textContent = '● ' + name;
         document.getElementById('radioPlayingName').style.color = 'var(--green)';
       } catch(e) {
         console.error('Radio stream failed:', e);
+        radioStreamActive = false;
         document.getElementById('radioNowPlaying').style.display = 'block';
         document.getElementById('radioPlayingName').textContent = '✕ ' + e.message;
         document.getElementById('radioPlayingName').style.color = 'var(--red)';
@@ -3327,13 +3307,12 @@
     }
 
     function stopRadioStream() {
-      if (radioAudioElement) {
-        radioAudioElement.pause();
-        radioAudioElement.src = '';
-        radioAudioElement = null;
+      if (radioStreamActive && musicAudioElement) {
+        musicAudioElement.pause();
+        musicAudioElement.src = '';
       }
-      if (radioSourceNode) { try { radioSourceNode.disconnect(); } catch(e) {} radioSourceNode = null; }
-      if (radioGainNode) { try { radioGainNode.disconnect(); } catch(e) {} radioGainNode = null; }
+      radioStreamActive = false;
+      radioStreamName = '';
       musicAnalyserConnected = false;
       musicAnalyserSource = null;
       document.getElementById('radioNowPlaying').style.display = 'none';
