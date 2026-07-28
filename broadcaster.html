@@ -2949,19 +2949,25 @@
     // MIC MUTE — mutes mic but music keeps playing
     let micMuted = false;
 
+    const isMobileDevice = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
     async function toggleMicMute() {
       micMuted = !micMuted;
       const btn = document.getElementById('micMuteBtn');
 
       if (micMuted) {
-        // Mute: kill gain, disconnect source, and STOP mic tracks entirely
-        // (track.enabled=false is unreliable on mobile — hardware mic still leaks audio)
         if (gainNode) gainNode.gain.value = 0;
         if (sourceNode) {
           try { sourceNode.disconnect(); } catch(e) {}
         }
         if (mediaStream) {
-          mediaStream.getAudioTracks().forEach(t => { t.stop(); });
+          if (isMobileDevice) {
+            // Mobile: stop tracks entirely to prevent hardware mic leak through headphone jack
+            mediaStream.getAudioTracks().forEach(t => { t.stop(); });
+          } else {
+            // Desktop: disable tracks but keep them alive so the audio graph stays scheduled
+            mediaStream.getAudioTracks().forEach(t => { t.enabled = false; });
+          }
         }
         btn.textContent = '🔇 MIC OFF';
         btn.classList.add('muted');
@@ -2985,21 +2991,31 @@
           }
         }
       } else {
-        // Unmute: re-acquire mic from hardware (tracks were stopped, not just disabled)
-        try {
-          const deviceId = document.getElementById('inputDevice').value;
-          const isExternal = (sourceMode === 'external');
-          const constraints = deviceId
-            ? { audio: { deviceId: { exact: deviceId }, echoCancellation: !isExternal, noiseSuppression: !isExternal, autoGainControl: !isExternal } }
-            : { audio: { echoCancellation: !isExternal, noiseSuppression: !isExternal, autoGainControl: !isExternal } };
-          mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
-          if (sourceNode) {
-            try { sourceNode.disconnect(); } catch(e) {}
+        if (isMobileDevice) {
+          // Mobile: re-acquire mic from hardware (tracks were stopped)
+          try {
+            const deviceId = document.getElementById('inputDevice').value;
+            const isExternal = (sourceMode === 'external');
+            const constraints = deviceId
+              ? { audio: { deviceId: { exact: deviceId }, echoCancellation: !isExternal, noiseSuppression: !isExternal, autoGainControl: !isExternal } }
+              : { audio: { echoCancellation: !isExternal, noiseSuppression: !isExternal, autoGainControl: !isExternal } };
+            mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+            if (sourceNode) {
+              try { sourceNode.disconnect(); } catch(e) {}
+            }
+            sourceNode = audioContext.createMediaStreamSource(mediaStream);
+            sourceNode.connect(highPassFilter);
+          } catch(e) {
+            console.error('Failed to re-acquire mic:', e);
           }
-          sourceNode = audioContext.createMediaStreamSource(mediaStream);
-          sourceNode.connect(highPassFilter);
-        } catch(e) {
-          console.error('Failed to re-acquire mic:', e);
+        } else {
+          // Desktop: re-enable tracks and reconnect source
+          if (mediaStream) {
+            mediaStream.getAudioTracks().forEach(t => { t.enabled = true; });
+          }
+          if (sourceNode && highPassFilter) {
+            try { sourceNode.connect(highPassFilter); } catch(e) {}
+          }
         }
         const db = parseFloat(document.getElementById('inputGain').value);
         const mixVol = parseFloat(document.getElementById('micMixVol').value);
