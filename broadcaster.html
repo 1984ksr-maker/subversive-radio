@@ -3994,7 +3994,7 @@
         statusLabel.textContent = 'WAITING...';
         statusLabel.style.color = 'var(--amber)';
         connRow.style.display = 'none';
-        linkInput.value = window.location.origin + '/cohost';
+        linkInput.value = window.location.origin + '/cohost?channel=' + encodeURIComponent(currentChannel);
         linkSection.style.display = 'block';
         panel.style.borderColor = 'var(--amber)';
       } else {
@@ -4092,7 +4092,7 @@
         statusLabel.textContent = 'WAITING...';
         statusLabel.style.color = 'var(--amber)';
         connRow.style.display = 'none';
-        linkInput.value = window.location.origin + '/dj-input';
+        linkInput.value = window.location.origin + '/dj-input?channel=' + encodeURIComponent(currentChannel);
         linkSection.style.display = 'block';
         panel.style.borderColor = 'var(--amber)';
       } else {

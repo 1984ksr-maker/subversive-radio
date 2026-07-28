@@ -703,6 +703,14 @@ io.on('connection', (socket) => {
     const channelId = (info && info.channel) || 'main';
     const ch = getChannel(channelId);
     if (!ch) return;
+    if (!ch.cohostAccessOpen) {
+      socket.emit('cohost-kicked');
+      return;
+    }
+
+    if (ch.cohostSocketId && ch.cohostSocketId !== socket.id) {
+      io.to(ch.cohostSocketId).emit('cohost-kicked');
+    }
 
     isCoHost = true;
     myChannelId = channelId;
@@ -747,6 +755,14 @@ io.on('connection', (socket) => {
     const channelId = (info && info.channel) || 'main';
     const ch = getChannel(channelId);
     if (!ch) return;
+    if (!ch.djInputAccessOpen) {
+      socket.emit('dj-input-kicked');
+      return;
+    }
+
+    if (ch.djInputSocketId && ch.djInputSocketId !== socket.id) {
+      io.to(ch.djInputSocketId).emit('dj-input-kicked');
+    }
 
     isDjInput = true;
     myChannelId = channelId;
@@ -755,6 +771,7 @@ io.on('connection', (socket) => {
     const name = (info && info.name) ? info.name.slice(0, 20) : 'DJ Input';
     console.log(`🎧  DJ input connected to [${channelId}]:`, name);
     socket.emit('dj-input-state', false);
+    socket.emit('station-info', ch.stationInfo);
     if (ch.broadcasterSocketId) {
       io.to(ch.broadcasterSocketId).emit('dj-input-joined', { id: socket.id, name });
     }
