@@ -331,7 +331,23 @@
             <div class="radio-section">
               <div class="radio-label">SERVER RADIO (AUTOPILOT)</div>
               <div class="radio-row">
-                <input type="text" id="radio-url-${ch.id}" placeholder="Stream URL (e.g. https://stream.example.com/live)" value="${ch.serverRadioUrl ? escapeHtml(ch.serverRadioUrl) : ''}">
+                <select onchange="pickRadioPreset(this,'${ch.id}')" style="padding:8px 10px;background:var(--surface2);border:1px solid #333;border-radius:6px;color:var(--text);font-family:inherit;font-size:11px;outline:none;min-width:140px">
+                  <option value="">-- Pick a station --</option>
+                  <option value="https://stream.laut.fm/lofi">Lo-Fi Beats</option>
+                  <option value="https://stream.laut.fm/jazz">Jazz FM</option>
+                  <option value="https://stream.laut.fm/electronica">Electronica</option>
+                  <option value="https://stream.laut.fm/dub">Dub Radio</option>
+                  <option value="https://stream.laut.fm/soul">Soul Station</option>
+                  <option value="https://stream.laut.fm/hiphop">Hip Hop</option>
+                  <option value="https://stream.laut.fm/classicrock">Classic Rock</option>
+                  <option value="https://stream.laut.fm/ambient">Ambient</option>
+                  <option value="http://stream.rynothebearded.com:8000/music-320.mp3">RynoTheBearded</option>
+                  <option value="https://stream.laut.fm/tangoargentino">Tango Argentino</option>
+                  <option value="https://stream.laut.fm/techno">Techno</option>
+                  <option value="https://stream.laut.fm/drumandbass">Drum & Bass</option>
+                  <option value="https://stream.laut.fm/reggae">Reggae</option>
+                </select>
+                <input type="text" id="radio-url-${ch.id}" placeholder="Or paste custom stream URL..." value="${ch.serverRadioUrl ? escapeHtml(ch.serverRadioUrl) : ''}">
                 ${ch.serverRadioActive
                   ? `<button class="btn btn-red btn-sm" onclick="stopServerRadio('${ch.id}')">Stop</button>`
                   : `<button class="btn btn-sm" onclick="startServerRadio('${ch.id}')" style="border-color:var(--green);color:var(--green)">Start</button>`
@@ -408,6 +424,13 @@
         status.textContent = 'Broadcaster link copied: ' + url;
         setTimeout(() => { status.className = 'status-msg'; }, 3000);
       });
+    }
+
+    function pickRadioPreset(sel, channelId) {
+      if (sel.value) {
+        document.getElementById('radio-url-' + channelId).value = sel.value;
+      }
+      sel.selectedIndex = 0;
     }
 
     async function saveServerRadioUrl(channelId) {
