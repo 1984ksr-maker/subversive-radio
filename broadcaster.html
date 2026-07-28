@@ -1635,6 +1635,11 @@
           if (ch.id === currentChannel) opt.selected = true;
           sel.appendChild(opt);
         });
+        if (lockedChannel) {
+          sel.disabled = true;
+          sel.title = 'Your access code is locked to this channel';
+          sel.style.opacity = '0.6';
+        }
       } catch (e) {}
     }
     let lockedChannel = null;
@@ -3283,6 +3288,7 @@
       if (audioContext.state === 'suspended') audioContext.resume();
 
       radioAudioElement = new Audio();
+      radioAudioElement.crossOrigin = 'anonymous';
       radioAudioElement.src = SERVER + '/api/stream-proxy?url=' + encodeURIComponent(url);
 
       radioSourceNode = audioContext.createMediaElementSource(radioAudioElement);
