@@ -438,19 +438,34 @@ app.post('/api/admin/revoke-all', (req, res) => {
 
 // ========== CHANNEL API ==========
 app.get('/api/channels', (req, res) => {
+  const session = getSession(req);
+  const admin = session && session.role === 'admin';
+  const lockedChannel = session && session.channel ? session.channel : null;
+
   const list = [];
   for (const [id, ch] of channels) {
-    list.push({
+    if (!admin) {
+      // Locked to a channel: only see that channel
+      if (lockedChannel && id !== lockedChannel) continue;
+      // Everyone else (unlocked code or public): only see live channels
+      if (!lockedChannel && !ch.stationInfo.isLive) continue;
+    }
+
+    const entry = {
       id,
       name: ch.name,
       isLive: ch.stationInfo.isLive,
       listeners: getChannelListenerCount(id),
       hasBroadcaster: !!ch.broadcasterSocketId,
       stationName: ch.stationInfo.name,
-      tagline: ch.stationInfo.tagline,
-      serverRadioUrl: ch.serverRadioUrl || null,
-      serverRadioActive: !!ch.serverRadioProcess
-    });
+      tagline: ch.stationInfo.tagline
+    };
+    // Only expose server radio info to admin
+    if (admin) {
+      entry.serverRadioUrl = ch.serverRadioUrl || null;
+      entry.serverRadioActive = !!ch.serverRadioProcess;
+    }
+    list.push(entry);
   }
   res.json(list);
 });
