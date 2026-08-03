@@ -441,14 +441,16 @@ app.get('/api/channels', (req, res) => {
   const session = getSession(req);
   const admin = session && session.role === 'admin';
   const lockedChannel = session && session.channel ? session.channel : null;
+  // Allow ?viewing= param so listener page can always see the channel it's on
+  const viewingChannel = req.query.viewing || null;
 
   const list = [];
   for (const [id, ch] of channels) {
     if (!admin) {
       // Locked to a channel: only see that channel
       if (lockedChannel && id !== lockedChannel) continue;
-      // Everyone else (unlocked code or public): only see live channels
-      if (!lockedChannel && !ch.stationInfo.isLive) continue;
+      // Everyone else: only see live channels + the channel they're currently viewing
+      if (!lockedChannel && !ch.stationInfo.isLive && id !== viewingChannel) continue;
     }
 
     const entry = {
@@ -542,6 +544,11 @@ app.get('/admin', (req, res) => {
 
 app.get('/broadcaster', (req, res) => {
   if (!isAuthenticated(req)) return res.redirect('/auth/login?redirect=/broadcaster');
+  // If user is locked to a channel but URL doesn't have it, redirect
+  const session = getSession(req);
+  if (session && session.channel && req.query.channel !== session.channel) {
+    return res.redirect('/broadcaster?channel=' + encodeURIComponent(session.channel));
+  }
   res.sendFile(path.join(__dirname, 'broadcaster.html'));
 });
 

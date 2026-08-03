@@ -561,7 +561,7 @@
 
     async function loadChannelButtons() {
       try {
-        const res = await fetch('/api/channels');
+        const res = await fetch('/api/channels?viewing=' + encodeURIComponent(currentChannelId));
         const list = await res.json();
         if (list.length <= 1) { document.getElementById('channelBar').style.display = 'none'; return; }
         const bar = document.getElementById('channelBar');
