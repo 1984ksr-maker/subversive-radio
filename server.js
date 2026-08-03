@@ -314,7 +314,7 @@ function getChannelMp3Encoder(ch) {
   if (!Mp3Encoder) return null;
   const rate = ch.stationInfo.sampleRate || 44100;
   if (!ch.mp3Encoder || ch.mp3EncoderRate !== rate) {
-    ch.mp3Encoder = new Mp3Encoder(1, rate, 128);
+    ch.mp3Encoder = new Mp3Encoder(1, rate, 192);
     ch.mp3EncoderRate = rate;
   }
   return ch.mp3Encoder;
