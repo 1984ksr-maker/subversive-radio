@@ -441,16 +441,11 @@ app.get('/api/channels', (req, res) => {
   const session = getSession(req);
   const admin = session && session.role === 'admin';
   const lockedChannel = session && session.channel ? session.channel : null;
-  // Allow ?viewing= param so listener page can always see the channel it's on
-  const viewingChannel = req.query.viewing || null;
-
   const list = [];
   for (const [id, ch] of channels) {
     if (!admin) {
       // Locked to a channel: only see that channel
       if (lockedChannel && id !== lockedChannel) continue;
-      // Everyone else: only see live channels + the channel they're currently viewing
-      if (!lockedChannel && !ch.stationInfo.isLive && id !== viewingChannel) continue;
     }
 
     const entry = {
