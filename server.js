@@ -140,6 +140,34 @@ function loginPageHTML(error = '', redirectTo = '/broadcaster') {
 
 // ========== MULTI-CHANNEL SYSTEM ==========
 const channels = new Map();
+const CHANNELS_FILE = path.join(__dirname, 'channels.json');
+
+function saveChannels() {
+  const data = [];
+  for (const [id, ch] of channels) {
+    data.push({
+      id,
+      name: ch.name,
+      stationName: ch.stationInfo.name,
+      tagline: ch.stationInfo.tagline,
+      serverRadioUrl: ch.serverRadioUrl || null
+    });
+  }
+  try { fs.writeFileSync(CHANNELS_FILE, JSON.stringify(data, null, 2)); } catch (e) {}
+}
+
+function loadChannels() {
+  try {
+    if (!fs.existsSync(CHANNELS_FILE)) return;
+    const data = JSON.parse(fs.readFileSync(CHANNELS_FILE, 'utf8'));
+    for (const saved of data) {
+      const ch = createChannel(saved.id, saved.name);
+      if (saved.stationName) ch.stationInfo.name = saved.stationName;
+      if (saved.tagline) ch.stationInfo.tagline = saved.tagline;
+      if (saved.serverRadioUrl) ch.serverRadioUrl = saved.serverRadioUrl;
+    }
+  } catch (e) { console.error('Failed to load channels:', e.message); }
+}
 
 function createChannel(id, name) {
   if (channels.has(id)) return channels.get(id);
@@ -241,8 +269,16 @@ function stopServerRadio(ch) {
   try { proc.kill('SIGTERM'); } catch(e) {}
 }
 
-// Create default channel
+// Create default channel, then load saved channels on top
 createChannel('main', 'SUBVERSIVE RADIO');
+loadChannels();
+
+for (const [id, ch] of channels) {
+  if (ch.serverRadioUrl) {
+    console.log(`Auto-starting server radio for channel "${id}": ${ch.serverRadioUrl}`);
+    startServerRadio(ch);
+  }
+}
 
 function getChannel(id) {
   return channels.get(id || 'main');
@@ -475,6 +511,7 @@ app.post('/api/channels', (req, res) => {
   const id = name.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').slice(0, 30);
   if (channels.has(id)) return res.status(400).json({ error: 'Channel already exists' });
   createChannel(id, name);
+  saveChannels();
   res.json({ ok: true, id, name });
 });
 
@@ -490,6 +527,7 @@ app.delete('/api/channels/:id', (req, res) => {
   }
   io.to('listeners-' + id).emit('station-offline');
   channels.delete(id);
+  saveChannels();
   res.json({ ok: true });
 });
 
@@ -503,6 +541,7 @@ app.post('/api/server-radio', (req, res) => {
   if (url === '' || url === null || url === undefined) {
     stopServerRadio(ch);
     ch.serverRadioUrl = null;
+    saveChannels();
     return res.json({ ok: true, channel: channelId, url: null, active: false });
   }
   if (typeof url !== 'string' || !url.startsWith('http')) {
@@ -510,6 +549,7 @@ app.post('/api/server-radio', (req, res) => {
   }
   stopServerRadio(ch);
   ch.serverRadioUrl = url.trim();
+  saveChannels();
   if (start !== false) {
     startServerRadio(ch);
   }
@@ -1046,6 +1086,7 @@ io.on('connection', (socket) => {
     if (!ch) return;
     ch.stationInfo.name = info.name || ch.stationInfo.name;
     ch.stationInfo.tagline = info.tagline || ch.stationInfo.tagline;
+    saveChannels();
     io.to('listeners-' + myChannelId).emit('station-info', ch.stationInfo);
   });
 
