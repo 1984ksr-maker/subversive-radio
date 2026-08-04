@@ -3641,7 +3641,9 @@
     // EXTERNAL AUDIO INPUT
     let extInputStream = null;
     let extInputSource = null;
+    let extHighPass = null;
     let extInputGain = null;
+    let extCompressor = null;
     let extInputPanner = null;
     let extInputAnalyser = null;
     let extMonitorGain = null;
@@ -3693,9 +3695,23 @@
         extInputStream = await navigator.mediaDevices.getUserMedia(constraints);
         extInputSource = audioContext.createMediaStreamSource(extInputStream);
 
+        // High-pass filter — cut rumble below 30Hz from line-level sources
+        extHighPass = audioContext.createBiquadFilter();
+        extHighPass.type = 'highpass';
+        extHighPass.frequency.value = 30;
+        extHighPass.Q.value = 0.7;
+
         // Gain control
         extInputGain = audioContext.createGain();
         extInputGain.gain.value = parseFloat(document.getElementById('extInputVolume').value);
+
+        // Soft compressor for hot line-level signals from mixers/CDJs
+        extCompressor = audioContext.createDynamicsCompressor();
+        extCompressor.threshold.value = -6;
+        extCompressor.ratio.value = 4;
+        extCompressor.attack.value = 0.003;
+        extCompressor.release.value = 0.1;
+        extCompressor.knee.value = 10;
 
         // Stereo panner
         extInputPanner = audioContext.createStereoPanner();
@@ -3709,9 +3725,11 @@
         extMonitorGain = audioContext.createGain();
         extMonitorGain.gain.value = 0;
 
-        // External input always goes to limiterNode (additive with mic)
-        extInputSource.connect(extInputGain);
-        extInputGain.connect(extInputPanner);
+        // Chain: source → highPass → gain → compressor → panner → limiter
+        extInputSource.connect(extHighPass);
+        extHighPass.connect(extInputGain);
+        extInputGain.connect(extCompressor);
+        extCompressor.connect(extInputPanner);
         extInputPanner.connect(limiterNode);
         extInputPanner.connect(extInputAnalyser);
         extInputPanner.connect(extMonitorGain);
@@ -3756,7 +3774,9 @@
         extInputStream = null;
       }
       if (extInputSource) { try { extInputSource.disconnect(); } catch(e) {} extInputSource = null; }
+      if (extHighPass) { try { extHighPass.disconnect(); } catch(e) {} extHighPass = null; }
       if (extInputGain) { try { extInputGain.disconnect(); } catch(e) {} extInputGain = null; }
+      if (extCompressor) { try { extCompressor.disconnect(); } catch(e) {} extCompressor = null; }
       if (extInputPanner) { try { extInputPanner.disconnect(); } catch(e) {} extInputPanner = null; }
       if (extInputAnalyser) { try { extInputAnalyser.disconnect(); } catch(e) {} extInputAnalyser = null; }
       if (extMonitorGain) { try { extMonitorGain.disconnect(); } catch(e) {} extMonitorGain = null; }
