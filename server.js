@@ -224,6 +224,7 @@ function startServerRadio(ch) {
 
   proc.stdout.on('data', (data) => {
     if (ch.serverRadioProcess !== proc) return;
+    if (ch.broadcasterSocketId) return;
     io.to('listeners-' + ch.id).volatile.emit('audio-stream', data);
     writeToChannelStreamClients(ch, data);
   });
@@ -858,6 +859,7 @@ io.on('connection', (socket) => {
     socket.join('broadcaster-' + channelId);
     isBroadcaster = true;
     myChannelId = channelId;
+    stopServerRadio(ch);
     ch.broadcasterSocketId = socket.id;
     console.log(`🎙️  Broadcaster connected to [${channelId}]`);
     socket.emit('listener-count', getChannelListenerCount(channelId));
