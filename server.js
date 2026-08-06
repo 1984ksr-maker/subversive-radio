@@ -615,7 +615,6 @@ app.get('/download', (req, res) => {
 app.get('/download/mac', (req, res) => {
   if (!isAuthenticated(req)) return res.status(401).send('Unauthorized');
   const dmgPath = path.join(__dirname, 'dist', 'Subversive Radio-1.0.0-arm64.dmg');
-  const fs = require('fs');
   if (fs.existsSync(dmgPath)) {
     res.download(dmgPath, 'Subversive-Radio-Installer.dmg');
   } else {
@@ -1056,7 +1055,11 @@ io.on('connection', (socket) => {
     console.log(`⭕ [${myChannelId}] Station offline`);
     // Resume server radio if configured
     if (ch.serverRadioUrl) {
-      setTimeout(() => startServerRadio(ch), 1000);
+      setTimeout(() => {
+        if (!ch.broadcasterSocketId && !ch.serverRadioProcess) {
+          startServerRadio(ch);
+        }
+      }, 3000);
     }
   });
 
@@ -1156,12 +1159,18 @@ io.on('connection', (socket) => {
     }
     if (isBroadcaster && ch.broadcasterSocketId === socket.id) {
       ch.stationInfo.isLive = false;
+      ch.stationInfo.currentTransmission = null;
       ch.broadcasterSocketId = null;
       io.to('listeners-' + myChannelId).emit('station-offline');
+      flushChannelStreamClients(ch);
       console.log(`🎙️  Broadcaster disconnected from [${myChannelId}]`);
       // Resume server radio if configured
       if (ch.serverRadioUrl) {
-        setTimeout(() => startServerRadio(ch), 2000);
+        setTimeout(() => {
+          if (!ch.broadcasterSocketId && !ch.serverRadioProcess) {
+            startServerRadio(ch);
+          }
+        }, 3000);
       }
     }
     if (isCoHost && ch.cohostSocketId === socket.id) {
@@ -1210,7 +1219,6 @@ setInterval(() => {
 // ========== TUNNEL ==========
 let tunnelRetryDelay = 3000;
 function startTunnel() {
-  const fs = require('fs');
   const localBin = path.join(__dirname, 'cloudflared');
   const tmpBin = '/tmp/cloudflared';
   let cfPath = null;
