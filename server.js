@@ -246,7 +246,7 @@ function startScheduleStream(entry, ch) {
 
     ytdlp.stderr.on('data', (data) => {
       const msg = data.toString().trim();
-      if (msg && !msg.startsWith('WARNING')) console.error(`📅 Schedule yt-dlp [${ch.id}]:`, msg);
+      if (msg && !msg.startsWith('WARNING') && !msg.startsWith('[download]')) console.error(`📅 Schedule yt-dlp [${ch.id}]:`, msg);
     });
 
     ffmpeg.stderr.on('data', (data) => {
