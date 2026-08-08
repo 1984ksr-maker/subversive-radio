@@ -1078,10 +1078,15 @@ io.on('connection', (socket) => {
     const ch = getChannel(channelId);
     if (!ch) return socket.emit('error-msg', 'Channel not found');
 
-    // Server-side channel lock: check if this user's session is locked to a different channel
+    // Must be authenticated to broadcast
     const sessionToken = parseCookies(socket.handshake).br_token;
     const session = sessionToken ? activeSessions.get(sessionToken) : null;
-    if (session && session.channel && session.channel !== channelId) {
+    if (!session) {
+      return socket.emit('error-msg', 'Not authenticated — please log in first');
+    }
+
+    // Server-side channel lock: check if this user's session is locked to a different channel
+    if (session.channel && session.channel !== channelId) {
       return socket.emit('error-msg', 'Your access code is locked to channel: ' + session.channel);
     }
 
@@ -1284,14 +1289,15 @@ io.on('connection', (socket) => {
     io.to('listeners-' + myChannelId).emit('station-offline');
     flushChannelStreamClients(ch);
     console.log(`⭕ [${myChannelId}] Station offline`);
-    // Resume server radio if configured
-    if (ch.serverRadioUrl) {
-      setTimeout(() => {
-        if (!ch.broadcasterSocketId && !ch.serverRadioProcess) {
+    // Resume schedule or server radio
+    setTimeout(() => {
+      if (!ch.broadcasterSocketId) {
+        checkSchedule();
+        if (!activeScheduleId && ch.serverRadioUrl && !ch.serverRadioProcess) {
           startServerRadio(ch);
         }
-      }, 3000);
-    }
+      }
+    }, 3000);
   });
 
   socket.on('play-transmission', (id) => {
@@ -1395,14 +1401,15 @@ io.on('connection', (socket) => {
       io.to('listeners-' + myChannelId).emit('station-offline');
       flushChannelStreamClients(ch);
       console.log(`🎙️  Broadcaster disconnected from [${myChannelId}]`);
-      // Resume server radio if configured
-      if (ch.serverRadioUrl) {
-        setTimeout(() => {
-          if (!ch.broadcasterSocketId && !ch.serverRadioProcess) {
+      // Resume scheduled content or server radio
+      setTimeout(() => {
+        if (!ch.broadcasterSocketId) {
+          checkSchedule();
+          if (!scheduleProcess && ch.serverRadioUrl && !ch.serverRadioProcess) {
             startServerRadio(ch);
           }
-        }, 3000);
-      }
+        }
+      }, 3000);
     }
     if (isCoHost && ch.cohostSocketId === socket.id) {
       ch.cohostSocketId = null;
