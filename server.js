@@ -170,287 +170,7 @@ function loadChannels() {
   } catch (e) { console.error('Failed to load channels:', e.message); }
 }
 
-// ========== SCHEDULE SYSTEM ==========
-const SCHEDULE_FILE = path.join(__dirname, 'schedule.json');
-let scheduleEntries = [];
-let activeScheduleId = null;
-let scheduleProcess = null;
 
-function saveSchedule() {
-  try { fs.writeFileSync(SCHEDULE_FILE, JSON.stringify(scheduleEntries, null, 2)); } catch (e) {}
-}
-
-function loadSchedule() {
-  try {
-    if (!fs.existsSync(SCHEDULE_FILE)) return;
-    scheduleEntries = JSON.parse(fs.readFileSync(SCHEDULE_FILE, 'utf8'));
-  } catch (e) { console.error('Failed to load schedule:', e.message); }
-}
-
-function resolveAudioUrl(url, callback) {
-  // Direct stream URLs pass through, SoundCloud/Mixcloud use yt-dlp
-  if (/soundcloud\.com|mixcloud\.com|youtube\.com|youtu\.be/.test(url)) {
-    const proc = spawn('yt-dlp', ['--no-download', '-g', '-f', 'bestaudio', url]);
-    let output = '';
-    proc.stdout.on('data', d => { output += d.toString(); });
-    proc.stderr.on('data', () => {});
-    proc.on('close', (code) => {
-      const resolved = output.trim().split('\n')[0];
-      callback(code === 0 && resolved ? resolved : null);
-    });
-    proc.on('error', () => callback(null));
-  } else {
-    callback(url);
-  }
-}
-
-const SCHEDULE_CACHE_DIR = path.join(__dirname, '.schedule-cache');
-if (!fs.existsSync(SCHEDULE_CACHE_DIR)) fs.mkdirSync(SCHEDULE_CACHE_DIR, { recursive: true });
-
-function getCachedFile(entryId) {
-  const files = fs.readdirSync(SCHEDULE_CACHE_DIR).filter(f =>
-    f.startsWith(entryId + '_') && !f.endsWith('.ytdl') && !f.endsWith('.part') && !f.includes('-Frag')
-  );
-  if (!files.length) return null;
-  const filePath = path.join(SCHEDULE_CACHE_DIR, files[0]);
-  const stat = fs.statSync(filePath);
-  if (stat.size < 10000) return null;
-  return filePath;
-}
-
-function downloadScheduleAudio(entry, callback) {
-  const cached = getCachedFile(entry.id);
-  if (cached) {
-    console.log(`📅 Schedule: using cached file for "${entry.title}"`);
-    return callback(cached);
-  }
-
-  const outFile = path.join(SCHEDULE_CACHE_DIR, entry.id + '_%(title)s.%(ext)s');
-  console.log(`📅 Schedule: downloading "${entry.title}"...`);
-  const dl = spawn('yt-dlp', ['-f', 'bestaudio', '-o', outFile, '--no-part', '--no-playlist', entry.url]);
-
-  dl.stderr.on('data', (data) => {
-    const msg = data.toString().trim();
-    if (msg && !msg.startsWith('WARNING') && !msg.startsWith('[download]')) {
-      console.error(`📅 Schedule download:`, msg);
-    }
-  });
-
-  dl.on('close', (code) => {
-    if (code !== 0) {
-      console.error(`📅 Schedule: download failed for "${entry.title}" (code ${code})`);
-      return callback(null);
-    }
-    // Clean up temp files
-    try {
-      fs.readdirSync(SCHEDULE_CACHE_DIR)
-        .filter(f => f.startsWith(entry.id + '_') && (f.endsWith('.ytdl') || f.endsWith('.part') || f.includes('-Frag')))
-        .forEach(f => fs.unlinkSync(path.join(SCHEDULE_CACHE_DIR, f)));
-    } catch (e) {}
-    const file = getCachedFile(entry.id);
-    if (file) {
-      console.log(`📅 Schedule: downloaded "${entry.title}" → ${path.basename(file)}`);
-      callback(file);
-    } else {
-      console.error(`📅 Schedule: download completed but file not found`);
-      callback(null);
-    }
-  });
-
-  dl.on('error', (err) => {
-    console.error(`📅 Schedule download error:`, err.message);
-    callback(null);
-  });
-
-  return dl;
-}
-
-function startScheduleStream(entry, ch) {
-  if (ch.broadcasterSocketId) return;
-  if (scheduleProcess) {
-    try { scheduleProcess.kill('SIGTERM'); } catch (e) {}
-    scheduleProcess = null;
-  }
-  stopServerRadio(ch);
-
-  const rate = ch.stationInfo.sampleRate || 44100;
-  const needsYtdlp = /soundcloud\.com|mixcloud\.com|youtube\.com|youtu\.be/.test(entry.url);
-
-  function playFile(filePath) {
-    if (ch.broadcasterSocketId) return;
-    const proc = spawn('ffmpeg', [
-      '-i', filePath,
-      '-f', 's16le', '-acodec', 'pcm_s16le', '-ac', '1', '-ar', String(rate),
-      '-v', 'error',
-      'pipe:1'
-    ]);
-
-    scheduleProcess = proc;
-    activeScheduleId = entry.id;
-    ch.stationInfo.isLive = true;
-    ch.stationInfo.serverRadio = true;
-    ch.stationInfo.currentTransmission = entry.title;
-    io.to('listeners-' + ch.id).emit('station-live', ch.stationInfo);
-    console.log(`📅 Schedule playing on [${ch.id}]: "${entry.title}"`);
-
-    proc.stdout.on('data', (data) => {
-      if (scheduleProcess !== proc) return;
-      if (ch.broadcasterSocketId) return;
-      io.to('listeners-' + ch.id).volatile.emit('audio-stream', data);
-      writeToChannelStreamClients(ch, data);
-    });
-
-    proc.stderr.on('data', (data) => {
-      const msg = data.toString().trim();
-      if (msg) console.error(`📅 Schedule ffmpeg [${ch.id}]:`, msg);
-    });
-
-    proc.on('close', () => {
-      if (scheduleProcess === proc) {
-        scheduleProcess = null;
-        activeScheduleId = null;
-        ch.stationInfo.currentTransmission = null;
-        if (!ch.broadcasterSocketId) {
-          setTimeout(() => checkSchedule(), 2000);
-        }
-      }
-    });
-
-    proc.on('error', (err) => {
-      console.error(`📅 Schedule spawn error:`, err.message);
-      scheduleProcess = null;
-      activeScheduleId = null;
-    });
-  }
-
-  if (needsYtdlp) {
-    // Download first, then play from local file (fast start, no buffering)
-    activeScheduleId = entry.id;
-    ch.stationInfo.currentTransmission = '⏳ ' + entry.title;
-    io.to('listeners-' + ch.id).emit('station-info', ch.stationInfo);
-
-    const dlProc = downloadScheduleAudio(entry, (filePath) => {
-      if (activeScheduleId !== entry.id) return;
-      if (!filePath) {
-        console.error(`📅 Schedule: cannot play "${entry.title}" — download failed`);
-        activeScheduleId = null;
-        ch.stationInfo.currentTransmission = null;
-        if (!ch.broadcasterSocketId && ch.serverRadioUrl && !ch.serverRadioProcess) {
-          startServerRadio(ch);
-        }
-        return;
-      }
-      playFile(filePath);
-    });
-    if (dlProc) {
-      scheduleProcess = dlProc;
-    }
-  } else {
-    // Direct URL — use ffmpeg directly with reconnect
-    const proc = spawn('ffmpeg', [
-      '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5',
-      '-i', entry.url,
-      '-f', 's16le', '-acodec', 'pcm_s16le', '-ac', '1', '-ar', String(rate),
-      '-v', 'error',
-      'pipe:1'
-    ]);
-
-    scheduleProcess = proc;
-    activeScheduleId = entry.id;
-    ch.stationInfo.isLive = true;
-    ch.stationInfo.serverRadio = true;
-    ch.stationInfo.currentTransmission = entry.title;
-    io.to('listeners-' + ch.id).emit('station-live', ch.stationInfo);
-    console.log(`📅 Schedule playing on [${ch.id}]: "${entry.title}"`);
-
-    proc.stdout.on('data', (data) => {
-      if (scheduleProcess !== proc) return;
-      if (ch.broadcasterSocketId) return;
-      io.to('listeners-' + ch.id).volatile.emit('audio-stream', data);
-      writeToChannelStreamClients(ch, data);
-    });
-
-    proc.stderr.on('data', (data) => {
-      const msg = data.toString().trim();
-      if (msg) console.error(`📅 Schedule ffmpeg [${ch.id}]:`, msg);
-    });
-
-    proc.on('close', () => {
-      if (scheduleProcess === proc) {
-        scheduleProcess = null;
-        activeScheduleId = null;
-        ch.stationInfo.currentTransmission = null;
-        if (!ch.broadcasterSocketId) {
-          setTimeout(() => checkSchedule(), 2000);
-        }
-      }
-    });
-
-    proc.on('error', (err) => {
-      console.error(`📅 Schedule spawn error:`, err.message);
-      scheduleProcess = null;
-      activeScheduleId = null;
-    });
-  }
-}
-
-function stopScheduleStream() {
-  if (scheduleProcess) {
-    if (scheduleProcess._ytdlpProc) {
-      try { scheduleProcess._ytdlpProc.kill('SIGTERM'); } catch (e) {}
-    }
-    try { scheduleProcess.kill('SIGTERM'); } catch (e) {}
-    scheduleProcess = null;
-  }
-  activeScheduleId = null;
-}
-
-function checkSchedule() {
-  const ch = getChannel('main');
-  if (!ch) return;
-  if (ch.broadcasterSocketId) return;
-
-  const now = new Date();
-  const day = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][now.getDay()];
-  const minutes = now.getHours() * 60 + now.getMinutes();
-
-  let matchedEntry = null;
-  for (const entry of scheduleEntries) {
-    if (!entry.enabled) continue;
-    if (!entry.days.includes(day)) continue;
-    const [sh, sm] = entry.startTime.split(':').map(Number);
-    const [eh, em] = entry.endTime.split(':').map(Number);
-    const start = sh * 60 + sm;
-    const end = eh * 60 + em;
-    if (end > start) {
-      if (minutes >= start && minutes < end) { matchedEntry = entry; break; }
-    } else {
-      // Overnight: e.g. 22:00–02:00
-      if (minutes >= start || minutes < end) { matchedEntry = entry; break; }
-    }
-  }
-
-  if (matchedEntry) {
-    if (activeScheduleId !== matchedEntry.id) {
-      startScheduleStream(matchedEntry, ch);
-    }
-  } else {
-    if (scheduleProcess) {
-      stopScheduleStream();
-      ch.stationInfo.isLive = false;
-      ch.stationInfo.currentTransmission = null;
-      io.to('listeners-' + ch.id).emit('station-offline');
-      flushChannelStreamClients(ch);
-      // Fall back to server radio
-      if (ch.serverRadioUrl && !ch.serverRadioProcess) {
-        setTimeout(() => startServerRadio(ch), 2000);
-      }
-    }
-  }
-}
-
-// Check schedule every 30 seconds
-setInterval(checkSchedule, 30000);
 
 function createChannel(id, name) {
   if (channels.has(id)) return channels.get(id);
@@ -556,17 +276,12 @@ function stopServerRadio(ch) {
 // Create default channel, then load saved channels on top
 createChannel('main', 'SUBVERSIVE RADIO');
 loadChannels();
-loadSchedule();
-
 for (const [id, ch] of channels) {
   if (ch.serverRadioUrl) {
     console.log(`Auto-starting server radio for channel "${id}": ${ch.serverRadioUrl}`);
     startServerRadio(ch);
   }
 }
-
-// Run initial schedule check after 5s (let server radio start first, schedule overrides if needed)
-setTimeout(checkSchedule, 5000);
 
 function getChannel(id) {
   return channels.get(id || 'main');
@@ -856,78 +571,6 @@ app.delete('/api/server-radio/:channel?', (req, res) => {
     io.to('listeners-' + channelId).emit('station-offline');
     flushChannelStreamClients(ch);
   }
-  res.json({ ok: true });
-});
-
-// ========== SCHEDULE API ==========
-app.get('/api/schedule', (req, res) => {
-  // Public: anyone can see the schedule (for timetable display)
-  const publicList = scheduleEntries.map(e => ({
-    id: e.id,
-    title: e.title,
-    artist: e.artist || '',
-    days: e.days,
-    startTime: e.startTime,
-    endTime: e.endTime,
-    enabled: e.enabled,
-    isPlaying: activeScheduleId === e.id
-  }));
-  // Admin gets the URLs too
-  if (isAdmin(req)) {
-    publicList.forEach((e, i) => { e.url = scheduleEntries[i].url; });
-  }
-  res.json(publicList);
-});
-
-app.post('/api/schedule', (req, res) => {
-  if (!isAdmin(req)) return res.status(403).json({ error: 'Admin only' });
-  const { title, artist, url, days, startTime, endTime } = req.body;
-  if (!title || !url || !days || !startTime || !endTime) {
-    return res.status(400).json({ error: 'title, url, days, startTime, endTime required' });
-  }
-  const entry = {
-    id: uuidv4().slice(0, 8),
-    title: String(title).slice(0, 100),
-    artist: String(artist || '').slice(0, 100),
-    url: String(url).trim(),
-    days: Array.isArray(days) ? days : [days],
-    startTime: String(startTime),
-    endTime: String(endTime),
-    enabled: true,
-    createdAt: new Date().toISOString()
-  };
-  scheduleEntries.push(entry);
-  saveSchedule();
-  checkSchedule();
-  res.json({ ok: true, entry });
-});
-
-app.put('/api/schedule/:id', (req, res) => {
-  if (!isAdmin(req)) return res.status(403).json({ error: 'Admin only' });
-  const entry = scheduleEntries.find(e => e.id === req.params.id);
-  if (!entry) return res.status(404).json({ error: 'Not found' });
-  const { title, artist, url, days, startTime, endTime, enabled } = req.body;
-  if (title !== undefined) entry.title = String(title).slice(0, 100);
-  if (artist !== undefined) entry.artist = String(artist || '').slice(0, 100);
-  if (url !== undefined) entry.url = String(url).trim();
-  if (days !== undefined) entry.days = Array.isArray(days) ? days : [days];
-  if (startTime !== undefined) entry.startTime = String(startTime);
-  if (endTime !== undefined) entry.endTime = String(endTime);
-  if (enabled !== undefined) entry.enabled = !!enabled;
-  saveSchedule();
-  checkSchedule();
-  res.json({ ok: true, entry });
-});
-
-app.delete('/api/schedule/:id', (req, res) => {
-  if (!isAdmin(req)) return res.status(403).json({ error: 'Admin only' });
-  const idx = scheduleEntries.findIndex(e => e.id === req.params.id);
-  if (idx === -1) return res.status(404).json({ error: 'Not found' });
-  if (activeScheduleId === scheduleEntries[idx].id) {
-    stopScheduleStream();
-  }
-  scheduleEntries.splice(idx, 1);
-  saveSchedule();
   res.json({ ok: true });
 });
 
@@ -1223,7 +866,6 @@ io.on('connection', (socket) => {
     isBroadcaster = true;
     myChannelId = channelId;
     stopServerRadio(ch);
-    stopScheduleStream();
     ch.broadcasterSocketId = socket.id;
     console.log(`🎙️  Broadcaster connected to [${channelId}]`);
     socket.emit('listener-count', getChannelListenerCount(channelId));
@@ -1395,9 +1037,7 @@ io.on('connection', (socket) => {
     if (!isBroadcaster || !myChannelId) return;
     const ch = myChannel();
     if (!ch) return;
-    // Stop server radio and schedule — live broadcaster takes over
     stopServerRadio(ch);
-    stopScheduleStream();
     ch.stationInfo.isLive = true;
     ch.stationInfo.serverRadio = false;
     if (info) {
@@ -1418,15 +1058,14 @@ io.on('connection', (socket) => {
     io.to('listeners-' + myChannelId).emit('station-offline');
     flushChannelStreamClients(ch);
     console.log(`⭕ [${myChannelId}] Station offline`);
-    // Resume schedule or server radio
-    setTimeout(() => {
-      if (!ch.broadcasterSocketId) {
-        checkSchedule();
-        if (!activeScheduleId && ch.serverRadioUrl && !ch.serverRadioProcess) {
+    // Resume server radio if configured
+    if (ch.serverRadioUrl) {
+      setTimeout(() => {
+        if (!ch.broadcasterSocketId && !ch.serverRadioProcess) {
           startServerRadio(ch);
         }
-      }
-    }, 3000);
+      }, 3000);
+    }
   });
 
   socket.on('play-transmission', (id) => {
@@ -1530,15 +1169,14 @@ io.on('connection', (socket) => {
       io.to('listeners-' + myChannelId).emit('station-offline');
       flushChannelStreamClients(ch);
       console.log(`🎙️  Broadcaster disconnected from [${myChannelId}]`);
-      // Resume scheduled content or server radio
-      setTimeout(() => {
-        if (!ch.broadcasterSocketId) {
-          checkSchedule();
-          if (!scheduleProcess && ch.serverRadioUrl && !ch.serverRadioProcess) {
+      // Resume server radio if configured
+      if (ch.serverRadioUrl) {
+        setTimeout(() => {
+          if (!ch.broadcasterSocketId && !ch.serverRadioProcess) {
             startServerRadio(ch);
           }
-        }
-      }, 3000);
+        }, 3000);
+      }
     }
     if (isCoHost && ch.cohostSocketId === socket.id) {
       ch.cohostSocketId = null;

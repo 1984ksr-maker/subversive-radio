@@ -527,11 +527,6 @@
         <span id="timeDisplay">—</span>
       </div>
 
-      <button class="chat-toggle" id="schedToggle" onclick="toggleSchedule()" style="margin-bottom:8px">📅 SCHEDULE</button>
-      <div class="chat-panel" id="schedPanel" style="display:none;max-height:300px;overflow-y:auto;margin-bottom:12px">
-        <div id="schedDisplay" style="padding:10px;font-size:11px;color:#999">Loading schedule...</div>
-      </div>
-
       <button class="chat-toggle" id="chatToggle" onclick="toggleChat()">💬 LIVE CHAT</button>
 
       <div class="chat-panel" id="chatPanel">
@@ -1098,58 +1093,6 @@
         }
       }
     });
-
-    // ========== SCHEDULE TIMETABLE ==========
-    let schedOpen = false;
-    const DAYS_ORDER = ['mon','tue','wed','thu','fri','sat','sun'];
-    const DAYS_LABEL = {mon:'Mon',tue:'Tue',wed:'Wed',thu:'Thu',fri:'Fri',sat:'Sat',sun:'Sun'};
-
-    function toggleSchedule() {
-      schedOpen = !schedOpen;
-      document.getElementById('schedPanel').style.display = schedOpen ? 'block' : 'none';
-      document.getElementById('schedToggle').classList.toggle('active', schedOpen);
-      if (schedOpen) loadPublicSchedule();
-    }
-
-    async function loadPublicSchedule() {
-      try {
-        const res = await fetch('/api/schedule');
-        const entries = await res.json();
-        const el = document.getElementById('schedDisplay');
-        const enabled = entries.filter(e => e.enabled);
-        if (!enabled.length) { el.innerHTML = '<div style="text-align:center;color:#555;padding:20px">No scheduled shows</div>'; return; }
-
-        const now = new Date();
-        const today = ['sun','mon','tue','wed','thu','fri','sat'][now.getDay()];
-        const mins = now.getHours() * 60 + now.getMinutes();
-
-        let html = '';
-        for (const day of DAYS_ORDER) {
-          const dayEntries = enabled.filter(e => e.days.includes(day));
-          if (!dayEntries.length) continue;
-          const isToday = day === today;
-          html += '<div style="margin-bottom:12px">';
-          html += '<div style="font-size:9px;letter-spacing:2px;color:' + (isToday ? '#ff2d2d' : '#555') + ';text-transform:uppercase;margin-bottom:6px;font-weight:bold">' + DAYS_LABEL[day] + (isToday ? ' · TODAY' : '') + '</div>';
-          for (const e of dayEntries) {
-            const playing = e.isPlaying && isToday;
-            html += '<div style="display:flex;justify-content:space-between;padding:6px 8px;background:' + (playing ? 'rgba(0,255,136,0.08)' : 'rgba(255,255,255,0.02)') + ';border-radius:4px;margin-bottom:4px;border-left:2px solid ' + (playing ? '#00ff88' : '#333') + '">';
-            html += '<div><span style="color:' + (playing ? '#00ff88' : '#e0e0e0') + ';font-weight:600">' + e.title + '</span>';
-            if (e.artist) html += ' <span style="color:#666">· ' + e.artist + '</span>';
-            if (playing) html += ' <span style="color:#00ff88;font-size:9px">▶ NOW</span>';
-            html += '</div>';
-            html += '<div style="color:#ffaa00;font-size:10px;white-space:nowrap;margin-left:12px">' + e.startTime + '–' + e.endTime + '</div>';
-            html += '</div>';
-          }
-          html += '</div>';
-        }
-        el.innerHTML = html;
-      } catch (e) {
-        document.getElementById('schedDisplay').innerHTML = '<div style="text-align:center;color:#555">Could not load schedule</div>';
-      }
-    }
-
-    loadPublicSchedule();
-    setInterval(loadPublicSchedule, 60000);
 
     // ========== LIVE CHAT ==========
     let chatOpen = false;
