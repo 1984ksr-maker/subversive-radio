@@ -212,17 +212,74 @@ function startScheduleStream(entry, ch) {
   }
   stopServerRadio(ch);
 
-  resolveAudioUrl(entry.url, (audioUrl) => {
-    if (!audioUrl) {
-      console.error(`📅 Schedule: failed to resolve URL for "${entry.title}"`);
-      return;
-    }
-    if (ch.broadcasterSocketId) return;
+  const rate = ch.stationInfo.sampleRate || 44100;
+  const needsYtdlp = /soundcloud\.com|mixcloud\.com|youtube\.com|youtu\.be/.test(entry.url);
 
-    const rate = ch.stationInfo.sampleRate || 44100;
+  if (needsYtdlp) {
+    // Use yt-dlp to download and pipe audio, then ffmpeg converts to PCM
+    const ytdlp = spawn('yt-dlp', ['-f', 'bestaudio', '-o', '-', '--no-part', entry.url]);
+    const ffmpeg = spawn('ffmpeg', [
+      '-i', 'pipe:0',
+      '-f', 's16le', '-acodec', 'pcm_s16le', '-ac', '1', '-ar', String(rate),
+      '-v', 'error',
+      'pipe:1'
+    ]);
+
+    ytdlp.stdout.pipe(ffmpeg.stdin);
+
+    scheduleProcess = ffmpeg;
+    // Keep reference to yt-dlp so we can kill it too
+    ffmpeg._ytdlpProc = ytdlp;
+    activeScheduleId = entry.id;
+    ch.stationInfo.isLive = true;
+    ch.stationInfo.serverRadio = true;
+    ch.stationInfo.currentTransmission = entry.title;
+    io.to('listeners-' + ch.id).emit('station-live', ch.stationInfo);
+    console.log(`📅 Schedule playing on [${ch.id}]: "${entry.title}" (via yt-dlp)`);
+
+    ffmpeg.stdout.on('data', (data) => {
+      if (scheduleProcess !== ffmpeg) return;
+      if (ch.broadcasterSocketId) return;
+      io.to('listeners-' + ch.id).volatile.emit('audio-stream', data);
+      writeToChannelStreamClients(ch, data);
+    });
+
+    ytdlp.stderr.on('data', (data) => {
+      const msg = data.toString().trim();
+      if (msg && !msg.startsWith('WARNING')) console.error(`📅 Schedule yt-dlp [${ch.id}]:`, msg);
+    });
+
+    ffmpeg.stderr.on('data', (data) => {
+      const msg = data.toString().trim();
+      if (msg) console.error(`📅 Schedule ffmpeg [${ch.id}]:`, msg);
+    });
+
+    ffmpeg.on('close', () => {
+      if (scheduleProcess === ffmpeg) {
+        scheduleProcess = null;
+        activeScheduleId = null;
+        ch.stationInfo.currentTransmission = null;
+        if (!ch.broadcasterSocketId) {
+          setTimeout(() => checkSchedule(), 2000);
+        }
+      }
+    });
+
+    ytdlp.on('error', (err) => {
+      console.error(`📅 Schedule yt-dlp spawn error:`, err.message);
+    });
+
+    ffmpeg.on('error', (err) => {
+      console.error(`📅 Schedule ffmpeg spawn error:`, err.message);
+      scheduleProcess = null;
+      activeScheduleId = null;
+    });
+
+  } else {
+    // Direct URL — use ffmpeg directly
     const proc = spawn('ffmpeg', [
       '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5',
-      '-i', audioUrl,
+      '-i', entry.url,
       '-f', 's16le', '-acodec', 'pcm_s16le', '-ac', '1', '-ar', String(rate),
       '-v', 'error',
       'pipe:1'
@@ -254,7 +311,6 @@ function startScheduleStream(entry, ch) {
         activeScheduleId = null;
         ch.stationInfo.currentTransmission = null;
         if (!ch.broadcasterSocketId) {
-          // Check if another scheduled item should play, otherwise fall back to server radio
           setTimeout(() => checkSchedule(), 2000);
         }
       }
@@ -265,11 +321,14 @@ function startScheduleStream(entry, ch) {
       scheduleProcess = null;
       activeScheduleId = null;
     });
-  });
+  }
 }
 
 function stopScheduleStream() {
   if (scheduleProcess) {
+    if (scheduleProcess._ytdlpProc) {
+      try { scheduleProcess._ytdlpProc.kill('SIGTERM'); } catch (e) {}
+    }
     try { scheduleProcess.kill('SIGTERM'); } catch (e) {}
     scheduleProcess = null;
   }
