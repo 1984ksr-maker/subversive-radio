@@ -139,7 +139,8 @@
             <label style="font-size:10px;color:var(--text);cursor:pointer"><input type="checkbox" class="sched-day" value="sun" checked> Sun</label>
           </div>
         </div>
-        <button class="btn" onclick="addScheduleEntry()">Add</button>
+        <button class="btn" id="schedSubmitBtn" onclick="submitScheduleEntry()">Add</button>
+        <button class="btn btn-red" id="schedCancelBtn" style="display:none" onclick="cancelScheduleEdit()">Cancel</button>
       </div>
       <div id="schedStatus" class="status-msg"></div>
       <div id="schedList" class="code-list" style="margin-top:16px">
@@ -589,6 +590,7 @@
                 ${e.isPlaying ? '<span style="color:var(--green);margin-left:8px;font-size:10px">▶ NOW PLAYING</span>' : ''}
               </div>
               <div style="display:flex;gap:6px">
+                <button class="btn" style="padding:4px 10px;font-size:9px" onclick="editScheduleEntry('${e.id}')">EDIT</button>
                 <button class="btn" style="padding:4px 10px;font-size:9px" onclick="toggleScheduleEntry('${e.id}', ${!e.enabled})">${e.enabled ? 'DISABLE' : 'ENABLE'}</button>
                 <button class="btn btn-red" style="padding:4px 10px;font-size:9px" onclick="deleteScheduleEntry('${e.id}')">DELETE</button>
               </div>
@@ -605,6 +607,79 @@
       } catch (e) {
         document.getElementById('schedList').innerHTML = '<div class="empty">Failed to load schedule</div>';
       }
+    }
+
+    let editingScheduleId = null;
+
+    function editScheduleEntry(id) {
+      fetch(`${SERVER}/api/schedule`).then(r => r.json()).then(entries => {
+        const e = entries.find(x => x.id === id);
+        if (!e) return;
+        editingScheduleId = id;
+        document.getElementById('schedTitle').value = e.title || '';
+        document.getElementById('schedArtist').value = e.artist || '';
+        document.getElementById('schedUrl').value = e.url || '';
+        document.getElementById('schedStart').value = e.startTime || '';
+        document.getElementById('schedEnd').value = e.endTime || '';
+        document.querySelectorAll('.sched-day').forEach(cb => {
+          cb.checked = (e.days || []).includes(cb.value);
+        });
+        document.getElementById('schedSubmitBtn').textContent = 'Save';
+        document.getElementById('schedCancelBtn').style.display = '';
+      });
+    }
+
+    function cancelScheduleEdit() {
+      editingScheduleId = null;
+      document.getElementById('schedTitle').value = '';
+      document.getElementById('schedArtist').value = '';
+      document.getElementById('schedUrl').value = '';
+      document.getElementById('schedStart').value = '20:00';
+      document.getElementById('schedEnd').value = '22:00';
+      document.querySelectorAll('.sched-day').forEach(cb => { cb.checked = true; });
+      document.getElementById('schedSubmitBtn').textContent = 'Add';
+      document.getElementById('schedCancelBtn').style.display = 'none';
+    }
+
+    async function submitScheduleEntry() {
+      if (editingScheduleId) {
+        return saveScheduleEdit();
+      }
+      return addScheduleEntry();
+    }
+
+    async function saveScheduleEdit() {
+      const title = document.getElementById('schedTitle').value.trim();
+      const artist = document.getElementById('schedArtist').value.trim();
+      const url = document.getElementById('schedUrl').value.trim();
+      const startTime = document.getElementById('schedStart').value;
+      const endTime = document.getElementById('schedEnd').value;
+      const days = [...document.querySelectorAll('.sched-day:checked')].map(c => c.value);
+      const status = document.getElementById('schedStatus');
+
+      if (!title || !url || !startTime || !endTime || !days.length) {
+        status.className = 'status-msg error'; status.textContent = 'Fill in title, URL, times, and at least one day';
+        setTimeout(() => { status.className = 'status-msg'; }, 3000); return;
+      }
+
+      try {
+        const res = await fetch(`${SERVER}/api/schedule/${editingScheduleId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, artist, url, startTime, endTime, days })
+        });
+        const data = await res.json();
+        if (data.ok) {
+          status.className = 'status-msg success'; status.textContent = 'Schedule entry updated';
+          cancelScheduleEdit();
+          loadSchedule();
+        } else {
+          status.className = 'status-msg error'; status.textContent = data.error || 'Failed to update';
+        }
+      } catch (e) {
+        status.className = 'status-msg error'; status.textContent = 'Failed to update schedule entry';
+      }
+      setTimeout(() => { status.className = 'status-msg'; }, 3000);
     }
 
     async function addScheduleEntry() {
