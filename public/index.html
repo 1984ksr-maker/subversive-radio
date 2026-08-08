@@ -1113,7 +1113,7 @@
 
     async function loadPublicSchedule() {
       try {
-        const res = await fetch(SERVER + '/api/schedule');
+        const res = await fetch('/api/schedule');
         const entries = await res.json();
         const el = document.getElementById('schedDisplay');
         const enabled = entries.filter(e => e.enabled);
