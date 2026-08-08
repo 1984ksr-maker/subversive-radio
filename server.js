@@ -335,13 +335,16 @@ function startScheduleStream(entry, ch) {
         console.error(`📅 Schedule: cannot play "${entry.title}" — download failed`);
         activeScheduleId = null;
         ch.stationInfo.currentTransmission = null;
+        if (!ch.broadcasterSocketId && ch.serverRadioUrl && !ch.serverRadioProcess) {
+          startServerRadio(ch);
+        }
         return;
       }
       playFile(filePath);
     });
-    // Store download process so stopScheduleStream can kill it
-    scheduleProcess = dlProc;
-    scheduleProcess._isDownloading = true;
+    if (dlProc) {
+      scheduleProcess = dlProc;
+    }
   } else {
     // Direct URL — use ffmpeg directly with reconnect
     const proc = spawn('ffmpeg', [
