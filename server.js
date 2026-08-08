@@ -204,6 +204,55 @@ function resolveAudioUrl(url, callback) {
   }
 }
 
+const SCHEDULE_CACHE_DIR = path.join(__dirname, '.schedule-cache');
+if (!fs.existsSync(SCHEDULE_CACHE_DIR)) fs.mkdirSync(SCHEDULE_CACHE_DIR, { recursive: true });
+
+function getCachedFile(entryId) {
+  const files = fs.readdirSync(SCHEDULE_CACHE_DIR).filter(f => f.startsWith(entryId + '_'));
+  return files.length ? path.join(SCHEDULE_CACHE_DIR, files[0]) : null;
+}
+
+function downloadScheduleAudio(entry, callback) {
+  const cached = getCachedFile(entry.id);
+  if (cached) {
+    console.log(`📅 Schedule: using cached file for "${entry.title}"`);
+    return callback(cached);
+  }
+
+  const outFile = path.join(SCHEDULE_CACHE_DIR, entry.id + '_%(title)s.%(ext)s');
+  console.log(`📅 Schedule: downloading "${entry.title}"...`);
+  const dl = spawn('yt-dlp', ['-f', 'bestaudio', '-o', outFile, '--no-part', '--no-playlist', entry.url]);
+
+  dl.stderr.on('data', (data) => {
+    const msg = data.toString().trim();
+    if (msg && !msg.startsWith('WARNING') && !msg.startsWith('[download]')) {
+      console.error(`📅 Schedule download:`, msg);
+    }
+  });
+
+  dl.on('close', (code) => {
+    if (code !== 0) {
+      console.error(`📅 Schedule: download failed for "${entry.title}" (code ${code})`);
+      return callback(null);
+    }
+    const file = getCachedFile(entry.id);
+    if (file) {
+      console.log(`📅 Schedule: downloaded "${entry.title}" → ${path.basename(file)}`);
+      callback(file);
+    } else {
+      console.error(`📅 Schedule: download completed but file not found`);
+      callback(null);
+    }
+  });
+
+  dl.on('error', (err) => {
+    console.error(`📅 Schedule download error:`, err.message);
+    callback(null);
+  });
+
+  return dl;
+}
+
 function startScheduleStream(entry, ch) {
   if (ch.broadcasterSocketId) return;
   if (scheduleProcess) {
@@ -215,47 +264,37 @@ function startScheduleStream(entry, ch) {
   const rate = ch.stationInfo.sampleRate || 44100;
   const needsYtdlp = /soundcloud\.com|mixcloud\.com|youtube\.com|youtu\.be/.test(entry.url);
 
-  if (needsYtdlp) {
-    // Use yt-dlp to download and pipe audio, then ffmpeg converts to PCM
-    const ytdlp = spawn('yt-dlp', ['-f', 'bestaudio', '-o', '-', '--no-part', entry.url]);
-    const ffmpeg = spawn('ffmpeg', [
-      '-i', 'pipe:0',
+  function playFile(filePath) {
+    if (ch.broadcasterSocketId) return;
+    const proc = spawn('ffmpeg', [
+      '-i', filePath,
       '-f', 's16le', '-acodec', 'pcm_s16le', '-ac', '1', '-ar', String(rate),
       '-v', 'error',
       'pipe:1'
     ]);
 
-    ytdlp.stdout.pipe(ffmpeg.stdin);
-
-    scheduleProcess = ffmpeg;
-    // Keep reference to yt-dlp so we can kill it too
-    ffmpeg._ytdlpProc = ytdlp;
+    scheduleProcess = proc;
     activeScheduleId = entry.id;
     ch.stationInfo.isLive = true;
     ch.stationInfo.serverRadio = true;
     ch.stationInfo.currentTransmission = entry.title;
     io.to('listeners-' + ch.id).emit('station-live', ch.stationInfo);
-    console.log(`📅 Schedule playing on [${ch.id}]: "${entry.title}" (via yt-dlp)`);
+    console.log(`📅 Schedule playing on [${ch.id}]: "${entry.title}"`);
 
-    ffmpeg.stdout.on('data', (data) => {
-      if (scheduleProcess !== ffmpeg) return;
+    proc.stdout.on('data', (data) => {
+      if (scheduleProcess !== proc) return;
       if (ch.broadcasterSocketId) return;
       io.to('listeners-' + ch.id).volatile.emit('audio-stream', data);
       writeToChannelStreamClients(ch, data);
     });
 
-    ytdlp.stderr.on('data', (data) => {
-      const msg = data.toString().trim();
-      if (msg && !msg.startsWith('WARNING') && !msg.startsWith('[download]')) console.error(`📅 Schedule yt-dlp [${ch.id}]:`, msg);
-    });
-
-    ffmpeg.stderr.on('data', (data) => {
+    proc.stderr.on('data', (data) => {
       const msg = data.toString().trim();
       if (msg) console.error(`📅 Schedule ffmpeg [${ch.id}]:`, msg);
     });
 
-    ffmpeg.on('close', () => {
-      if (scheduleProcess === ffmpeg) {
+    proc.on('close', () => {
+      if (scheduleProcess === proc) {
         scheduleProcess = null;
         activeScheduleId = null;
         ch.stationInfo.currentTransmission = null;
@@ -265,18 +304,34 @@ function startScheduleStream(entry, ch) {
       }
     });
 
-    ytdlp.on('error', (err) => {
-      console.error(`📅 Schedule yt-dlp spawn error:`, err.message);
-    });
-
-    ffmpeg.on('error', (err) => {
-      console.error(`📅 Schedule ffmpeg spawn error:`, err.message);
+    proc.on('error', (err) => {
+      console.error(`📅 Schedule spawn error:`, err.message);
       scheduleProcess = null;
       activeScheduleId = null;
     });
+  }
 
+  if (needsYtdlp) {
+    // Download first, then play from local file (fast start, no buffering)
+    activeScheduleId = entry.id;
+    ch.stationInfo.currentTransmission = '⏳ ' + entry.title;
+    io.to('listeners-' + ch.id).emit('station-info', ch.stationInfo);
+
+    const dlProc = downloadScheduleAudio(entry, (filePath) => {
+      if (activeScheduleId !== entry.id) return;
+      if (!filePath) {
+        console.error(`📅 Schedule: cannot play "${entry.title}" — download failed`);
+        activeScheduleId = null;
+        ch.stationInfo.currentTransmission = null;
+        return;
+      }
+      playFile(filePath);
+    });
+    // Store download process so stopScheduleStream can kill it
+    scheduleProcess = dlProc;
+    scheduleProcess._isDownloading = true;
   } else {
-    // Direct URL — use ffmpeg directly
+    // Direct URL — use ffmpeg directly with reconnect
     const proc = spawn('ffmpeg', [
       '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5',
       '-i', entry.url,
