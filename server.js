@@ -170,6 +170,159 @@ function loadChannels() {
   } catch (e) { console.error('Failed to load channels:', e.message); }
 }
 
+// ========== SCHEDULE SYSTEM ==========
+const SCHEDULE_FILE = path.join(__dirname, 'schedule.json');
+let scheduleEntries = [];
+let activeScheduleId = null;
+let scheduleProcess = null;
+
+function saveSchedule() {
+  try { fs.writeFileSync(SCHEDULE_FILE, JSON.stringify(scheduleEntries, null, 2)); } catch (e) {}
+}
+
+function loadSchedule() {
+  try {
+    if (!fs.existsSync(SCHEDULE_FILE)) return;
+    scheduleEntries = JSON.parse(fs.readFileSync(SCHEDULE_FILE, 'utf8'));
+  } catch (e) { console.error('Failed to load schedule:', e.message); }
+}
+
+function resolveAudioUrl(url, callback) {
+  // Direct stream URLs pass through, SoundCloud/Mixcloud use yt-dlp
+  if (/soundcloud\.com|mixcloud\.com|youtube\.com|youtu\.be/.test(url)) {
+    const proc = spawn('yt-dlp', ['--no-download', '-g', '-f', 'bestaudio', url]);
+    let output = '';
+    proc.stdout.on('data', d => { output += d.toString(); });
+    proc.stderr.on('data', () => {});
+    proc.on('close', (code) => {
+      const resolved = output.trim().split('\n')[0];
+      callback(code === 0 && resolved ? resolved : null);
+    });
+    proc.on('error', () => callback(null));
+  } else {
+    callback(url);
+  }
+}
+
+function startScheduleStream(entry, ch) {
+  if (ch.broadcasterSocketId) return;
+  if (scheduleProcess) {
+    try { scheduleProcess.kill('SIGTERM'); } catch (e) {}
+    scheduleProcess = null;
+  }
+  stopServerRadio(ch);
+
+  resolveAudioUrl(entry.url, (audioUrl) => {
+    if (!audioUrl) {
+      console.error(`📅 Schedule: failed to resolve URL for "${entry.title}"`);
+      return;
+    }
+    if (ch.broadcasterSocketId) return;
+
+    const rate = ch.stationInfo.sampleRate || 44100;
+    const proc = spawn('ffmpeg', [
+      '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5',
+      '-i', audioUrl,
+      '-f', 's16le', '-acodec', 'pcm_s16le', '-ac', '1', '-ar', String(rate),
+      '-v', 'error',
+      'pipe:1'
+    ]);
+
+    scheduleProcess = proc;
+    activeScheduleId = entry.id;
+    ch.stationInfo.isLive = true;
+    ch.stationInfo.serverRadio = true;
+    ch.stationInfo.currentTransmission = entry.title;
+    io.to('listeners-' + ch.id).emit('station-live', ch.stationInfo);
+    console.log(`📅 Schedule playing on [${ch.id}]: "${entry.title}"`);
+
+    proc.stdout.on('data', (data) => {
+      if (scheduleProcess !== proc) return;
+      if (ch.broadcasterSocketId) return;
+      io.to('listeners-' + ch.id).volatile.emit('audio-stream', data);
+      writeToChannelStreamClients(ch, data);
+    });
+
+    proc.stderr.on('data', (data) => {
+      const msg = data.toString().trim();
+      if (msg) console.error(`📅 Schedule ffmpeg [${ch.id}]:`, msg);
+    });
+
+    proc.on('close', () => {
+      if (scheduleProcess === proc) {
+        scheduleProcess = null;
+        activeScheduleId = null;
+        ch.stationInfo.currentTransmission = null;
+        if (!ch.broadcasterSocketId) {
+          // Check if another scheduled item should play, otherwise fall back to server radio
+          setTimeout(() => checkSchedule(), 2000);
+        }
+      }
+    });
+
+    proc.on('error', (err) => {
+      console.error(`📅 Schedule spawn error:`, err.message);
+      scheduleProcess = null;
+      activeScheduleId = null;
+    });
+  });
+}
+
+function stopScheduleStream() {
+  if (scheduleProcess) {
+    try { scheduleProcess.kill('SIGTERM'); } catch (e) {}
+    scheduleProcess = null;
+  }
+  activeScheduleId = null;
+}
+
+function checkSchedule() {
+  const ch = getChannel('main');
+  if (!ch) return;
+  if (ch.broadcasterSocketId) return;
+
+  const now = new Date();
+  const day = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][now.getDay()];
+  const minutes = now.getHours() * 60 + now.getMinutes();
+
+  let matchedEntry = null;
+  for (const entry of scheduleEntries) {
+    if (!entry.enabled) continue;
+    if (!entry.days.includes(day)) continue;
+    const [sh, sm] = entry.startTime.split(':').map(Number);
+    const [eh, em] = entry.endTime.split(':').map(Number);
+    const start = sh * 60 + sm;
+    const end = eh * 60 + em;
+    if (end > start) {
+      if (minutes >= start && minutes < end) { matchedEntry = entry; break; }
+    } else {
+      // Overnight: e.g. 22:00–02:00
+      if (minutes >= start || minutes < end) { matchedEntry = entry; break; }
+    }
+  }
+
+  if (matchedEntry) {
+    if (activeScheduleId !== matchedEntry.id) {
+      startScheduleStream(matchedEntry, ch);
+    }
+  } else {
+    if (scheduleProcess) {
+      stopScheduleStream();
+      ch.stationInfo.isLive = false;
+      ch.stationInfo.currentTransmission = null;
+      io.to('listeners-' + ch.id).emit('station-offline');
+      flushChannelStreamClients(ch);
+      // Fall back to server radio
+      if (ch.serverRadioUrl && !ch.serverRadioProcess) {
+        setTimeout(() => startServerRadio(ch), 2000);
+      }
+    }
+  }
+}
+
+// Check schedule every 30 seconds
+setInterval(checkSchedule, 30000);
+
 function createChannel(id, name) {
   if (channels.has(id)) return channels.get(id);
   const ch = {
@@ -274,6 +427,7 @@ function stopServerRadio(ch) {
 // Create default channel, then load saved channels on top
 createChannel('main', 'SUBVERSIVE RADIO');
 loadChannels();
+loadSchedule();
 
 for (const [id, ch] of channels) {
   if (ch.serverRadioUrl) {
@@ -281,6 +435,9 @@ for (const [id, ch] of channels) {
     startServerRadio(ch);
   }
 }
+
+// Run initial schedule check after 5s (let server radio start first, schedule overrides if needed)
+setTimeout(checkSchedule, 5000);
 
 function getChannel(id) {
   return channels.get(id || 'main');
@@ -573,6 +730,78 @@ app.delete('/api/server-radio/:channel?', (req, res) => {
   res.json({ ok: true });
 });
 
+// ========== SCHEDULE API ==========
+app.get('/api/schedule', (req, res) => {
+  // Public: anyone can see the schedule (for timetable display)
+  const publicList = scheduleEntries.map(e => ({
+    id: e.id,
+    title: e.title,
+    artist: e.artist || '',
+    days: e.days,
+    startTime: e.startTime,
+    endTime: e.endTime,
+    enabled: e.enabled,
+    isPlaying: activeScheduleId === e.id
+  }));
+  // Admin gets the URLs too
+  if (isAdmin(req)) {
+    publicList.forEach((e, i) => { e.url = scheduleEntries[i].url; });
+  }
+  res.json(publicList);
+});
+
+app.post('/api/schedule', (req, res) => {
+  if (!isAdmin(req)) return res.status(403).json({ error: 'Admin only' });
+  const { title, artist, url, days, startTime, endTime } = req.body;
+  if (!title || !url || !days || !startTime || !endTime) {
+    return res.status(400).json({ error: 'title, url, days, startTime, endTime required' });
+  }
+  const entry = {
+    id: uuidv4().slice(0, 8),
+    title: String(title).slice(0, 100),
+    artist: String(artist || '').slice(0, 100),
+    url: String(url).trim(),
+    days: Array.isArray(days) ? days : [days],
+    startTime: String(startTime),
+    endTime: String(endTime),
+    enabled: true,
+    createdAt: new Date().toISOString()
+  };
+  scheduleEntries.push(entry);
+  saveSchedule();
+  checkSchedule();
+  res.json({ ok: true, entry });
+});
+
+app.put('/api/schedule/:id', (req, res) => {
+  if (!isAdmin(req)) return res.status(403).json({ error: 'Admin only' });
+  const entry = scheduleEntries.find(e => e.id === req.params.id);
+  if (!entry) return res.status(404).json({ error: 'Not found' });
+  const { title, artist, url, days, startTime, endTime, enabled } = req.body;
+  if (title !== undefined) entry.title = String(title).slice(0, 100);
+  if (artist !== undefined) entry.artist = String(artist || '').slice(0, 100);
+  if (url !== undefined) entry.url = String(url).trim();
+  if (days !== undefined) entry.days = Array.isArray(days) ? days : [days];
+  if (startTime !== undefined) entry.startTime = String(startTime);
+  if (endTime !== undefined) entry.endTime = String(endTime);
+  if (enabled !== undefined) entry.enabled = !!enabled;
+  saveSchedule();
+  checkSchedule();
+  res.json({ ok: true, entry });
+});
+
+app.delete('/api/schedule/:id', (req, res) => {
+  if (!isAdmin(req)) return res.status(403).json({ error: 'Admin only' });
+  const idx = scheduleEntries.findIndex(e => e.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Not found' });
+  if (activeScheduleId === scheduleEntries[idx].id) {
+    stopScheduleStream();
+  }
+  scheduleEntries.splice(idx, 1);
+  saveSchedule();
+  res.json({ ok: true });
+});
+
 // ========== PROTECTED PAGES ==========
 app.get('/admin', (req, res) => {
   if (!isAdmin(req)) return res.redirect('/auth/login?redirect=/admin');
@@ -860,6 +1089,7 @@ io.on('connection', (socket) => {
     isBroadcaster = true;
     myChannelId = channelId;
     stopServerRadio(ch);
+    stopScheduleStream();
     ch.broadcasterSocketId = socket.id;
     console.log(`🎙️  Broadcaster connected to [${channelId}]`);
     socket.emit('listener-count', getChannelListenerCount(channelId));
@@ -1031,8 +1261,9 @@ io.on('connection', (socket) => {
     if (!isBroadcaster || !myChannelId) return;
     const ch = myChannel();
     if (!ch) return;
-    // Stop server radio — live broadcaster takes over
+    // Stop server radio and schedule — live broadcaster takes over
     stopServerRadio(ch);
+    stopScheduleStream();
     ch.stationInfo.isLive = true;
     ch.stationInfo.serverRadio = false;
     if (info) {
