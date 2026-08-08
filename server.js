@@ -208,8 +208,14 @@ const SCHEDULE_CACHE_DIR = path.join(__dirname, '.schedule-cache');
 if (!fs.existsSync(SCHEDULE_CACHE_DIR)) fs.mkdirSync(SCHEDULE_CACHE_DIR, { recursive: true });
 
 function getCachedFile(entryId) {
-  const files = fs.readdirSync(SCHEDULE_CACHE_DIR).filter(f => f.startsWith(entryId + '_'));
-  return files.length ? path.join(SCHEDULE_CACHE_DIR, files[0]) : null;
+  const files = fs.readdirSync(SCHEDULE_CACHE_DIR).filter(f =>
+    f.startsWith(entryId + '_') && !f.endsWith('.ytdl') && !f.endsWith('.part') && !f.includes('-Frag')
+  );
+  if (!files.length) return null;
+  const filePath = path.join(SCHEDULE_CACHE_DIR, files[0]);
+  const stat = fs.statSync(filePath);
+  if (stat.size < 10000) return null;
+  return filePath;
 }
 
 function downloadScheduleAudio(entry, callback) {
@@ -235,6 +241,12 @@ function downloadScheduleAudio(entry, callback) {
       console.error(`📅 Schedule: download failed for "${entry.title}" (code ${code})`);
       return callback(null);
     }
+    // Clean up temp files
+    try {
+      fs.readdirSync(SCHEDULE_CACHE_DIR)
+        .filter(f => f.startsWith(entry.id + '_') && (f.endsWith('.ytdl') || f.endsWith('.part') || f.includes('-Frag')))
+        .forEach(f => fs.unlinkSync(path.join(SCHEDULE_CACHE_DIR, f)));
+    } catch (e) {}
     const file = getCachedFile(entry.id);
     if (file) {
       console.log(`📅 Schedule: downloaded "${entry.title}" → ${path.basename(file)}`);
