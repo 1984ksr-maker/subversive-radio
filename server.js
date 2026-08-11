@@ -270,7 +270,7 @@ function stopServerRadio(ch) {
   const proc = ch.serverRadioProcess;
   ch.serverRadioProcess = null;
   ch.stationInfo.serverRadio = false;
-  try { proc.kill('SIGTERM'); } catch(e) {}
+  try { proc.kill('SIGKILL'); } catch(e) {}
 }
 
 // Create default channel, then load saved channels on top
