@@ -872,6 +872,27 @@ io.on('connection', (socket) => {
     socket.emit('channel-joined', { channelId, channelName: ch.name });
     const url = tunnelUrl || `http://${socket.handshake.headers.host}`;
     socket.emit('tunnel-url', url);
+
+    // Re-send cohost state if one is connected (handles broadcaster reconnect)
+    if (ch.cohostSocketId) {
+      const cohostSocket = io.sockets.sockets.get(ch.cohostSocketId);
+      if (cohostSocket) {
+        socket.emit('cohost-joined', { id: ch.cohostSocketId, name: 'Co-Host' });
+      } else {
+        ch.cohostSocketId = null;
+        ch.cohostMicAllowed = false;
+      }
+    }
+    // Re-send DJ input state
+    if (ch.djInputSocketId) {
+      const djSocket = io.sockets.sockets.get(ch.djInputSocketId);
+      if (djSocket) {
+        socket.emit('dj-input-joined', { id: ch.djInputSocketId, name: 'DJ Input' });
+      } else {
+        ch.djInputSocketId = null;
+        ch.djInputAllowed = false;
+      }
+    }
   });
 
   // CO-HOST

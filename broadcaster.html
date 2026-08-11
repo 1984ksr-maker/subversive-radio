@@ -1619,7 +1619,16 @@
     const SERVER = window.location.origin;
     const urlParams = new URLSearchParams(window.location.search);
     let currentChannel = urlParams.get('channel') || 'main';
-    const socket = io(SERVER);
+    const socket = io(SERVER, {
+      transports: ['websocket', 'polling'],
+      upgrade: true,
+      reconnection: true,
+      reconnectionDelay: 500,
+      reconnectionDelayMax: 3000,
+      reconnectionAttempts: Infinity,
+      pingTimeout: 120000,
+      pingInterval: 15000
+    });
 
     // Load available channels into dropdown
     async function loadChannels() {
@@ -2733,10 +2742,11 @@
           if (mp3buf.length > 0) mp3Data.push(mp3buf);
         };
 
-        // Connect recordDestination output → mp3RecordNode → destination (required for processing)
+        // Connect recordDestination output → mp3RecordNode → silent destination (keeps processor alive without speaker output)
         const recSource = audioContext.createMediaStreamSource(recordDestination.stream);
         recSource.connect(mp3RecordNode);
-        mp3RecordNode.connect(audioContext.destination);
+        const recSilentDest = audioContext.createMediaStreamDestination();
+        mp3RecordNode.connect(recSilentDest);
         mp3RecordNode._recSource = recSource;
 
         isRecording = true;
@@ -2750,6 +2760,8 @@
         recordingInterval = setInterval(() => {
           const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
           timer.textContent = String(Math.floor(elapsed / 60)).padStart(2, '0') + ':' + String(elapsed % 60).padStart(2, '0');
+          // Keep audio context alive during recording
+          if (audioContext && audioContext.state === 'suspended') audioContext.resume();
         }, 200);
 
       } else {
