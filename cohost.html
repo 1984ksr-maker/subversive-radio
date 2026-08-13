@@ -217,7 +217,14 @@
     The host controls your mic. When they allow it, tap the mic button to start talking. Your audio will be mixed with the main broadcast.
   </div>
 
+  <div style="width:100%;max-width:340px;margin-top:18px;display:flex;flex-direction:column;gap:8px">
+    <div style="font-size:10px;letter-spacing:2px;color:#555;text-transform:uppercase;text-align:center">Live Video</div>
+    <div id="cameraMount" style="width:100%"></div>
+    <div id="videoPanelsMount" style="width:100%;display:none;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:6px"></div>
+  </div>
+
   <script src="/socket.io/socket.io.js"></script>
+  <script src="/video-stream.js"></script>
   <script>
     const socket = io(window.location.origin, {
       transports: ['websocket', 'polling'],
@@ -240,6 +247,19 @@
       const name = document.getElementById('cohostName').value.trim() || 'Co-Host';
       socket.emit('join-cohost', { name, channel: cohostChannel });
       updateStatus();
+    });
+
+    // ===== LIVE VIDEO PANELS =====
+    VideoStream.initSender({
+      socket,
+      role: 'cohost',
+      mount: '#cameraMount',
+      getName: () => (document.getElementById('cohostName').value.trim() || 'Co-Host')
+    });
+    VideoStream.initViewer({
+      socket,
+      container: '#videoPanelsMount',
+      isSelf: (id) => id === socket.id
     });
 
     socket.on('station-info', (info) => {

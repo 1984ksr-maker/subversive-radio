@@ -198,7 +198,8 @@ function createChannel(id, name) {
     mp3Encoder: null,
     mp3EncoderRate: 0,
     serverRadioUrl: null,
-    serverRadioProcess: null
+    serverRadioProcess: null,
+    videoSenders: new Map() // socketId -> { id, role, name, lastFrame }
   };
   channels.set(id, ch);
   return ch;
@@ -344,6 +345,16 @@ function writeToChannelStreamClients(ch, data) {
     if (res.writableLength > 2 * 1024 * 1024) { res.destroy(); ch.streamClients.delete(res); continue; }
     try { res.write(chunk); } catch (e) { ch.streamClients.delete(res); }
   }
+}
+
+// Send the current list of live video senders (with their last frame) to one socket
+function sendVideoSnapshot(socket, ch) {
+  if (!ch.videoSenders.size) return;
+  const list = [];
+  for (const s of ch.videoSenders.values()) {
+    list.push({ id: s.id, role: s.role, name: s.name, lastFrame: s.lastFrame });
+  }
+  socket.emit('video-senders', list);
 }
 
 function flushChannelStreamClients(ch) {
@@ -863,10 +874,12 @@ io.on('connection', (socket) => {
     }
 
     socket.join('broadcaster-' + channelId);
+    socket.join('video-' + channelId);
     isBroadcaster = true;
     myChannelId = channelId;
     stopServerRadio(ch);
     ch.broadcasterSocketId = socket.id;
+    sendVideoSnapshot(socket, ch);
     console.log(`🎙️  Broadcaster connected to [${channelId}]`);
     socket.emit('listener-count', getChannelListenerCount(channelId));
     socket.emit('channel-joined', { channelId, channelName: ch.name });
@@ -913,6 +926,8 @@ io.on('connection', (socket) => {
     myChannelId = channelId;
     ch.cohostSocketId = socket.id;
     ch.cohostMicAllowed = false;
+    socket.join('video-' + channelId);
+    sendVideoSnapshot(socket, ch);
     const name = (info && info.name) ? info.name.slice(0, 20) : 'Co-Host';
     console.log(`🎙️  Co-host connected to [${channelId}]:`, name);
     socket.emit('listener-count', getChannelListenerCount(channelId));
@@ -1007,6 +1022,7 @@ io.on('connection', (socket) => {
     // Leave any previous channel
     if (myChannelId && myChannelId !== channelId) {
       socket.leave('listeners-' + myChannelId);
+      socket.leave('video-' + myChannelId);
       const oldCh = getChannel(myChannelId);
       if (oldCh) {
         const oldCount = getChannelListenerCount(myChannelId);
@@ -1015,6 +1031,7 @@ io.on('connection', (socket) => {
     }
 
     socket.join('listeners-' + channelId);
+    socket.join('video-' + channelId);
     isListener = true;
     myChannelId = channelId;
     const count = getChannelListenerCount(channelId);
@@ -1022,6 +1039,7 @@ io.on('connection', (socket) => {
     io.to('broadcaster-' + channelId).emit('listener-count', count);
     socket.emit('station-info', ch.stationInfo);
     socket.emit('channel-joined', { channelId, channelName: ch.name });
+    sendVideoSnapshot(socket, ch);
   });
 
   // AUDIO STREAM — routed per channel
@@ -1051,6 +1069,46 @@ io.on('connection', (socket) => {
     // Broadcaster audio — send to this channel's listeners only
     io.to('listeners-' + myChannelId).volatile.emit('audio-stream', data);
     writeToChannelStreamClients(ch, data);
+  });
+
+  // ========== LIVE VIDEO PANELS (MJPEG over socket) ==========
+  function videoRole() {
+    if (isBroadcaster) return 'host';
+    if (isCoHost) return 'cohost';
+    if (isDjInput) return 'dj';
+    return null;
+  }
+
+  socket.on('video-start', (info) => {
+    const role = videoRole();
+    if (!role || !myChannelId) return;
+    const ch = myChannel();
+    if (!ch) return;
+    const name = (info && info.name ? String(info.name).slice(0, 20) : '') || role.toUpperCase();
+    ch.videoSenders.set(socket.id, { id: socket.id, role, name, lastFrame: null });
+    socket.to('video-' + myChannelId).emit('video-start', { id: socket.id, role, name });
+    console.log(`📹 Video ON [${myChannelId}] ${role} (${name})`);
+  });
+
+  socket.on('video-frame', (data) => {
+    if (!myChannelId) return;
+    const ch = myChannel();
+    if (!ch) return;
+    const sender = ch.videoSenders.get(socket.id);
+    if (!sender) return;
+    if (typeof data !== 'string' || data.length > 500000) return; // ~500KB frame cap
+    sender.lastFrame = data;
+    socket.to('video-' + myChannelId).volatile.emit('video-frame', { id: socket.id, data });
+  });
+
+  socket.on('video-stop', () => {
+    if (!myChannelId) return;
+    const ch = myChannel();
+    if (!ch) return;
+    if (ch.videoSenders.delete(socket.id)) {
+      socket.to('video-' + myChannelId).emit('video-stop', { id: socket.id });
+      console.log(`📹 Video OFF [${myChannelId}] ${socket.id}`);
+    }
   });
 
   // STATION CONTROLS — per channel (broadcaster only)
@@ -1178,6 +1236,12 @@ io.on('connection', (socket) => {
     if (!myChannelId) return;
     const ch = myChannel();
     if (!ch) return;
+
+    // Clean up any live video panel this socket was sending
+    if (ch.videoSenders.has(socket.id)) {
+      ch.videoSenders.delete(socket.id);
+      io.to('video-' + myChannelId).emit('video-stop', { id: socket.id });
+    }
 
     if (isListener) {
       const count = getChannelListenerCount(myChannelId);
