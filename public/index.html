@@ -471,6 +471,13 @@
       outline: none;
     }
 
+    #videoPanels {
+      width: 100%;
+      display: none;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 8px;
+    }
+
     @media (max-width: 520px) {
       .radio { padding: 10px; }
       .radio-body { padding: 28px 20px; }
@@ -497,6 +504,8 @@
         The broadcaster may be offline.
         <br><button onclick="retryConnection()">RETRY</button>
       </div>
+
+      <div id="videoPanels"></div>
 
       <div class="player-area" id="playerArea">
         <div class="visualizer-ring">
@@ -546,6 +555,7 @@
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
+  <script src="/video-stream.js"></script>
   <script>
     let socket;
     let audioContext;
@@ -1183,6 +1193,9 @@
 
     // Start connection
     connectSocket();
+
+    // ===== LIVE VIDEO PANELS — watch the host / co-host on camera =====
+    VideoStream.initViewer({ socket, container: '#videoPanels' });
 
     // Register service worker for PWA
     if ('serviceWorker' in navigator) {
