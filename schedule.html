@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Subversive Schedule</title>
+<style>
+  :root {
+    --bg: #0a0a0a; --surface: #131313; --surface2: #1b1b1b; --line: #262626; --line2: #333;
+    --text: #e4e4e4; --dim: #777; --faint: #4a4a4a;
+    --red: #ff2d2d; --red-soft: rgba(255,45,45,0.12);
+    --amber: #ffaa00; --amber-soft: rgba(255,170,0,0.12);
+    --green: #00e07a; --blue: #4aa8ff;
+    --hour: 30px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'SF Mono', 'Fira Code', Menlo, 'Courier New', monospace; background: var(--bg); color: var(--text); font-size: 12px; min-height: 100vh; }
+  button, input, select { font-family: inherit; font-size: inherit; color: inherit; }
+  a { color: inherit; }
+
+  header { display: flex; align-items: center; gap: 16px; padding: 14px 20px; border-bottom: 1px solid var(--line); flex-wrap: wrap; position: sticky; top: 0; background: rgba(10,10,10,0.94); backdrop-filter: blur(6px); z-index: 20; }
+  header h1 { font-size: 13px; letter-spacing: 4px; text-transform: uppercase; color: var(--amber); white-space: nowrap; }
+  header h1 span { color: var(--dim); }
+  .tabs { display: flex; gap: 4px; }
+  .tab { padding: 6px 12px; border: 1px solid var(--line2); border-radius: 6px; background: none; cursor: pointer; letter-spacing: 1px; text-transform: uppercase; font-size: 10px; color: var(--dim); }
+  .tab.on { border-color: var(--amber); color: var(--amber); background: var(--amber-soft); }
+  .spacer { flex: 1; }
+  .head-links { display: flex; gap: 8px; }
+  .head-links a { text-decoration: none; font-size: 10px; letter-spacing: 1px; padding: 6px 10px; border: 1px solid var(--line2); border-radius: 6px; color: var(--dim); }
+  .head-links a:hover { color: var(--text); border-color: var(--text); }
+
+  main { padding: 20px; display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr) 380px; max-width: 1500px; margin: 0 auto; }
+  @media (max-width: 1100px) { main { grid-template-columns: minmax(0, 1fr); } }
+  .col { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; min-width: 0; }
+  .panel h2 { font-size: 10px; letter-spacing: 3px; text-transform: uppercase; color: var(--dim); margin-bottom: 14px; display: flex; align-items: center; gap: 10px; }
+  .panel h2 .grow { flex: 1; }
+
+  .btn { padding: 8px 14px; border: 1px solid var(--amber); border-radius: 6px; background: var(--amber-soft); color: var(--amber); font-size: 10px; font-weight: bold; letter-spacing: 1.5px; text-transform: uppercase; cursor: pointer; white-space: nowrap; }
+  .btn:hover { background: var(--amber); color: #000; }
+  .btn.ghost { border-color: var(--line2); background: none; color: var(--dim); }
+  .btn.ghost:hover { border-color: var(--text); color: var(--text); background: none; }
+  .btn.red { border-color: var(--red); color: var(--red); background: var(--red-soft); }
+  .btn.red:hover { background: var(--red); color: #fff; }
+  .btn.sm { padding: 5px 9px; font-size: 9px; }
+  .btn:disabled { opacity: 0.4; cursor: default; }
+  .icon-btn { background: none; border: 1px solid transparent; border-radius: 5px; color: var(--dim); cursor: pointer; width: 26px; height: 26px; display: inline-grid; place-items: center; flex-shrink: 0; }
+  .icon-btn:hover { color: var(--text); border-color: var(--line2); }
+  .icon-btn.danger:hover { color: var(--red); border-color: var(--red); }
+  .icon-btn svg { width: 14px; height: 14px; }
+
+  input[type=text], input[type=time], select { background: var(--bg); border: 1px solid var(--line2); border-radius: 6px; padding: 8px 10px; outline: none; min-width: 0; }
+  input:focus, select:focus { border-color: var(--amber); }
+  label.field { display: flex; flex-direction: column; gap: 5px; font-size: 9px; letter-spacing: 1px; text-transform: uppercase; color: var(--dim); }
+  label.field > input, label.field > select { text-transform: none; letter-spacing: 0; font-size: 12px; color: var(--text); }
+
+  /* switch */
+  .switch { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; }
+  .switch input { display: none; }
+  .switch .track { width: 38px; height: 20px; border-radius: 10px; background: var(--line2); position: relative; transition: background .2s; }
+  .switch .track::after { content: ''; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--dim); transition: all .2s; }
+  .switch input:checked + .track { background: var(--amber-soft); box-shadow: inset 0 0 0 1px var(--amber); }
+  .switch input:checked + .track::after { left: 21px; background: var(--amber); }
+
+  /* on air */
+  .onair { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 18px; align-items: center; }
+  @media (max-width: 700px) { .onair { grid-template-columns: minmax(0, 1fr); } }
+  .mode { width: 128px; padding: 14px 0; text-align: center; border-radius: 8px; border: 2px solid var(--line2); font-weight: bold; letter-spacing: 3px; font-size: 13px; color: var(--dim); }
+  .mode small { display: block; font-size: 8px; letter-spacing: 1.5px; font-weight: normal; margin-top: 4px; opacity: 0.8; }
+  .mode.live { border-color: var(--red); color: var(--red); background: var(--red-soft); animation: pulse 1.6s infinite; }
+  .mode.auto { border-color: var(--amber); color: var(--amber); background: var(--amber-soft); }
+  .mode.relay { border-color: var(--blue); color: var(--blue); }
+  @keyframes pulse { 50% { box-shadow: 0 0 0 6px rgba(255,45,45,0.08); } }
+  .np-title { font-size: 16px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .np-sub { color: var(--dim); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .progress { height: 3px; background: var(--line2); border-radius: 2px; margin-top: 12px; overflow: hidden; }
+  .progress div { height: 100%; background: var(--amber); width: 0; transition: width 1s linear; }
+  .np-times { display: flex; justify-content: space-between; color: var(--faint); font-size: 10px; margin-top: 5px; }
+  .onair-actions { display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
+  .meta-row { display: flex; gap: 22px; flex-wrap: wrap; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); color: var(--dim); font-size: 10px; }
+  .meta-row b { color: var(--text); font-weight: normal; }
+  .warn { margin-top: 12px; padding: 10px 12px; border: 1px solid var(--amber); border-radius: 6px; color: var(--amber); background: var(--amber-soft); font-size: 11px; line-height: 1.5; }
+
+  /* calendar */
+  .cal-toolbar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; color: var(--dim); font-size: 10px; }
+  .cal-toolbar select { font-size: 11px; padding: 6px 8px; }
+  .legend { display: flex; gap: 14px; align-items: center; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: -1px; margin-right: 5px; }
+  .cal-scroll { overflow: auto; max-height: 560px; border: 1px solid var(--line); border-radius: 8px; }
+  .cal { display: grid; grid-template-columns: 46px repeat(7, minmax(92px, 1fr)); min-width: 700px; position: relative; }
+  .cal-head { position: sticky; top: 0; z-index: 5; background: var(--surface2); border-bottom: 1px solid var(--line); padding: 8px 6px; text-align: center; font-size: 10px; letter-spacing: 2px; color: var(--dim); }
+  .cal-head.today { color: var(--amber); }
+  .cal-hours { position: relative; }
+  .cal-hours div { height: var(--hour); font-size: 9px; color: var(--faint); text-align: right; padding-right: 6px; transform: translateY(-6px); }
+  .day-col { position: relative; border-left: 1px solid var(--line); height: calc(var(--hour) * 24); cursor: crosshair; background-image: repeating-linear-gradient(to bottom, transparent 0, transparent calc(var(--hour) - 1px), var(--line) calc(var(--hour) - 1px), var(--line) var(--hour)); touch-action: none; }
+  .day-col.today { background-color: rgba(255,170,0,0.025); }
+  .slot { position: absolute; left: 3px; right: 3px; border-radius: 5px; padding: 4px 6px; overflow: hidden; cursor: pointer; font-size: 10px; line-height: 1.3; border: 1px solid var(--amber); background: #2a2010; color: var(--amber); z-index: 2; }
+  .slot:hover { filter: brightness(1.25); }
+  .slot .t { font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .slot .s { opacity: 0.75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .slot.live { border-color: var(--red); color: #ff8080; background: repeating-linear-gradient(135deg, #2a1010 0 6px, #221010 6px 12px); }
+  .slot.active { box-shadow: 0 0 0 2px var(--text); }
+  .slot.draft { border-style: dashed; background: rgba(255,170,0,0.15); pointer-events: none; }
+  .now-line { position: absolute; left: 0; right: 0; height: 2px; background: var(--red); z-index: 4; pointer-events: none; }
+  .now-line::before { content: ''; position: absolute; left: -4px; top: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--red); }
+
+  .fallback { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 14px; color: var(--dim); font-size: 11px; }
+  .fallback select { min-width: 200px; }
+
+  /* lists */
+  .drop { border: 1px dashed var(--line2); border-radius: 8px; padding: 18px; text-align: center; color: var(--dim); cursor: pointer; transition: all .2s; line-height: 1.6; }
+  .drop:hover, .drop.over { border-color: var(--amber); color: var(--amber); background: var(--amber-soft); }
+  .uploads { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+  .up-item { font-size: 10px; color: var(--dim); }
+  .up-item .bar { height: 2px; background: var(--line2); margin-top: 4px; border-radius: 1px; overflow: hidden; }
+  .up-item .bar div { height: 100%; background: var(--amber); width: 0; }
+  .up-item.err { color: var(--red); }
+  .up-item.done { color: var(--green); }
+  .search { width: 100%; margin: 12px 0 8px; }
+  .list { display: flex; flex-direction: column; max-height: 380px; overflow: auto; margin: 0 -6px; }
+  .row { display: flex; align-items: center; gap: 6px; padding: 6px; border-radius: 6px; }
+  .row:hover { background: var(--surface2); }
+  .row .info { flex: 1; min-width: 0; }
+  .row .ti { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
+  .row .ar { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--dim); font-size: 10px; margin-top: 2px; }
+  .row .dur { color: var(--faint); font-size: 10px; flex-shrink: 0; }
+  .row .num { color: var(--faint); font-size: 10px; width: 18px; text-align: right; flex-shrink: 0; }
+  .row.playing .ti { color: var(--amber); }
+  .empty { color: var(--faint); padding: 14px 6px; line-height: 1.6; }
+
+  .pl-head { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+  .pl-head select { flex: 1; }
+  .pl-tools { display: flex; gap: 10px; align-items: center; justify-content: space-between; margin: 4px 0 10px; color: var(--dim); font-size: 10px; flex-wrap: wrap; }
+  .history .row { padding: 4px 6px; }
+  .history time { color: var(--faint); font-size: 10px; width: 40px; flex-shrink: 0; }
+
+  /* modal */
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: none; align-items: center; justify-content: center; z-index: 50; padding: 16px; }
+  .modal-bg.open { display: flex; }
+  .modal { background: var(--surface); border: 1px solid var(--line2); border-radius: 12px; padding: 22px; width: 100%; max-width: 440px; max-height: 92vh; overflow: auto; }
+  .modal h3 { font-size: 11px; letter-spacing: 3px; text-transform: uppercase; color: var(--amber); margin-bottom: 18px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .stack { display: flex; flex-direction: column; gap: 14px; }
+  .seg { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line2); border-radius: 6px; overflow: hidden; }
+  .seg button { background: none; border: none; padding: 9px; cursor: pointer; color: var(--dim); font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; }
+  .seg button.on.auto { background: var(--amber-soft); color: var(--amber); }
+  .seg button.on.live { background: var(--red-soft); color: var(--red); }
+  .days { display: flex; gap: 4px; flex-wrap: wrap; }
+  .days label { cursor: pointer; }
+  .days input { display: none; }
+  .days span { display: inline-block; padding: 6px 8px; border: 1px solid var(--line2); border-radius: 5px; font-size: 10px; color: var(--dim); }
+  .days input:checked + span { border-color: var(--amber); color: var(--amber); background: var(--amber-soft); }
+  .hint { color: var(--faint); font-size: 10px; line-height: 1.6; text-transform: none; letter-spacing: 0; }
+  .modal-actions { display: flex; gap: 8px; margin-top: 20px; }
+  .modal-actions .spacer { flex: 1; }
+  .err-msg { color: var(--red); font-size: 11px; min-height: 14px; }
+
+  .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--surface2); border: 1px solid var(--line2); padding: 10px 16px; border-radius: 8px; font-size: 11px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 60; }
+  .toast.show { opacity: 1; }
+
+  @media (max-width: 600px) {
+    header { padding: 12px 16px; }
+    main { padding: 16px; }
+    .panel { padding: 14px; }
+    .mode { width: 100%; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Subversive <span>/</span> Schedule</h1>
+  <div class="tabs" id="tabs"></div>
+  <div class="spacer"></div>
+  <label class="switch" title="Turn the AutoDJ on or off for this channel">
+    <input type="checkbox" id="enabled"><span class="track"></span><span>AutoDJ</span>
+  </label>
+  <div class="head-links">
+    <a href="/admin">Admin</a>
+    <a href="/broadcaster">Broadcaster</a>
+    <a href="/" target="_blank">Listen</a>
+  </div>
+</header>
+
+<main>
+  <div class="col">
+    <section class="panel">
+      <h2>On air</h2>
+      <div class="onair">
+        <div class="mode" id="mode">OFF<small>off air</small></div>
+        <div style="min-width:0">
+          <div class="np-title" id="npTitle">Nothing playing</div>
+          <div class="np-sub" id="npSub">Turn on the AutoDJ and add a schedule slot or a fallback playlist.</div>
+          <div class="progress"><div id="npBar"></div></div>
+          <div class="np-times"><span id="npPos">0:00</span><span id="npDur">0:00</span></div>
+        </div>
+        <div class="onair-actions">
+          <button class="btn ghost" id="skipBtn" disabled>Skip track</button>
+        </div>
+      </div>
+      <div class="meta-row">
+        <span>Slot <b id="metaSlot">none</b></span>
+        <span>Playlist <b id="metaPl">none</b></span>
+        <span>Next <b id="metaNext">nothing scheduled</b></span>
+        <span>Stream listeners <b id="metaListeners">0</b></span>
+        <span>Station time <b id="metaTime">--:--</b></span>
+      </div>
+      <div class="warn" id="warn" hidden></div>
+    </section>
+
+    <section class="panel">
+      <h2>Weekly schedule <span class="grow"></span><button class="btn sm" id="addSlotBtn">+ Add slot</button></h2>
+      <div class="cal-toolbar">
+        <div class="legend">
+          <span><i style="background:#2a2010;border:1px solid var(--amber)"></i>AutoDJ playlist</span>
+          <span><i style="background:#2a1010;border:1px solid var(--red)"></i>Live show</span>
+        </div>
+        <span class="spacer"></span>
+        <span>Drag on the grid to create a slot. Times in</span>
+        <select id="tz"></select>
+      </div>
+      <div class="cal-scroll" id="calScroll">
+        <div class="cal" id="cal"></div>
+      </div>
+      <div class="fallback">
+        <span>Outside scheduled slots (and while a live slot waits for the DJ), play:</span>
+        <select id="fallback"></select>
+      </div>
+    </section>
+
+    <section class="panel history">
+      <h2>Recently played</h2>
+      <div class="list" id="history"><div class="empty">Nothing yet.</div></div>
+    </section>
+  </div>
+
+  <div class="col">
+    <section class="panel">
+      <h2>Playlists <span class="grow"></span><button class="btn sm" id="newPlBtn">+ New</button></h2>
+      <div class="pl-head">
+        <select id="plSelect"></select>
+        <button class="icon-btn" id="plRename" title="Rename playlist"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></button>
+        <button class="icon-btn danger" id="plDelete" title="Delete playlist"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg></button>
+      </div>
+      <div class="pl-tools">
+        <label class="switch"><input type="checkbox" id="plShuffle"><span class="track"></span><span>Shuffle</span></label>
+        <span id="plInfo"></span>
+      </div>
+      <div class="list" id="plTracks"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Music library <span class="grow"></span><span id="libCount" style="letter-spacing:1px"></span></h2>
+      <div class="drop" id="drop">Drop audio files here or click to upload<br><span class="hint">MP3, WAV, FLAC, M4A, OGG. Converted to 128 kbps MP3 on the server.</span></div>
+      <input type="file" id="fileInput" accept="audio/*,.mp3,.wav,.flac,.m4a,.aac,.ogg,.aiff,.aif" multiple hidden>
+      <div class="uploads" id="uploads"></div>
+      <input type="text" class="search" id="search" placeholder="Search library">
+      <div class="list" id="library"></div>
+    </section>
+  </div>
+</main>
+
+<div class="modal-bg" id="slotModal">
+  <div class="modal">
+    <h3 id="slotModalTitle">New slot</h3>
+    <div class="stack">
+      <div class="seg" id="typeSeg">
+        <button data-type="auto" class="on auto">AutoDJ playlist</button>
+        <button data-type="live">Live show</button>
+      </div>
+      <label class="field" id="plField">Playlist
+        <select id="fPlaylist"></select>
+      </label>
+      <label class="field">Title
+        <input type="text" id="fTitle" placeholder="e.g. Morning ambient" maxlength="80">
+      </label>
+      <div class="field" style="display:flex;flex-direction:column;gap:6px;font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--dim)">
+        <span id="daysLabel">Days</span>
+        <div class="days" id="fDays"></div>
+      </div>
+      <div class="grid2">
+        <label class="field">Start<input type="time" id="fStart" step="300"></label>
+        <label class="field">End<input type="time" id="fEnd" step="300"></label>
+      </div>
+      <div class="hint" id="typeHint"></div>
+      <div class="err-msg" id="fErr"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn red" id="fDelete" hidden>Delete</button>
+      <span class="spacer"></span>
+      <button class="btn ghost" id="fCancel">Cancel</button>
+      <button class="btn" id="fSave">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<audio id="preview" preload="none"></audio>
+
+<script>
+(function () {
+  const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const COL_ORDER = [1, 2, 3, 4, 5, 6, 0]; // Mon..Sun
+  const ICON = {
+    play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4l13 8-13 8z"/></svg>',
+    stop: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12"/></svg>',
+    plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>',
+    up: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 15l6-6 6 6"/></svg>',
+    down: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>',
+    x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+    trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>',
+    edit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg>'
+  };
+
+  let state = { timezone: 'Europe/Berlin', tracks: [], playlists: [], channels: [] };
+  let channelId = new URLSearchParams(location.search).get('channel') || 'main';
+  let selectedPl = null;
+  let liveStatus = null;
+  let previewId = null;
+  let storage = null;
+
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const fmt = (sec) => { sec = Math.max(0, Math.round(sec || 0)); const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60; return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s).padStart(2, '0'); };
+  const toMin = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+  const fromMin = (m) => String(Math.floor(m / 60) % 25).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+  const tracksById = () => Object.fromEntries(state.tracks.map(t => [t.id, t]));
+  const plById = (id) => state.playlists.find(p => p.id === id);
+  const conf = () => state.channels.find(c => c.id === channelId) || { slots: [], enabled: false, fallbackPlaylistId: null };
+
+  function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 2400); }
+
+  async function api(method, url, body) {
+    const res = await fetch(url, { method, headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined, credentials: 'same-origin' });
+    if (res.status === 403) { location.href = '/auth/login?redirect=/schedule'; throw new Error('auth'); }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Request failed');
+    return data;
+  }
+
+  async function load() {
+    state = await api('GET', '/api/autodj');
+    storage = state.storage || storage;
+    if (!state.channels.find(c => c.id === channelId)) channelId = state.channels[0] ? state.channels[0].id : 'main';
+    if (!selectedPl || !plById(selectedPl)) selectedPl = state.playlists[0] ? state.playlists[0].id : null;
+    render();
+  }
+
+  function render() {
+    renderTabs(); renderTz(); renderCalendar(); renderFallback(); renderPlaylists(); renderLibrary();
+    $('enabled').checked = !!conf().enabled;
+    const ch = state.channels.find(c => c.id === channelId);
+    if (ch && ch.status) renderStatus(ch.status);
+  }
+
+  function renderTabs() {
+    $('tabs').innerHTML = state.channels.map(c => `<button class="tab ${c.id === channelId ? 'on' : ''}" data-ch="${esc(c.id)}">${esc(c.name || c.id)}</button>`).join('');
+    $('tabs').querySelectorAll('.tab').forEach(b => b.onclick = () => { channelId = b.dataset.ch; history.replaceState(null, '', '?channel=' + encodeURIComponent(channelId)); render(); pollStatus(); });
+  }
+
+  function renderTz() {
+    const sel = $('tz');
+    if (!sel.options.length) {
+      let zones = [];
+      try { zones = Intl.supportedValuesOf('timeZone'); } catch (e) { zones = ['UTC', 'Europe/Berlin', 'Europe/London', 'America/New_York', 'Asia/Colombo']; }
+      if (!zones.includes(state.timezone)) zones.unshift(state.timezone);
+      sel.innerHTML = zones.map(z => `<option>${esc(z)}</option>`).join('');
+    }
+    sel.value = state.timezone;
+  }
+
+  function playlistOptions(selected, emptyLabel) {
+    return (emptyLabel ? `<option value="">${esc(emptyLabel)}</option>` : '') + state.playlists.map(p => `<option value="${esc(p.id)}" ${p.id === selected ? 'selected' : ''}>${esc(p.name)} (${p.trackIds.length})</option>`).join('');
+  }
+
+  function renderFallback() {
+    $('fallback').innerHTML = playlistOptions(conf().fallbackPlaylistId, 'Nothing (silence or stream relay)');
+  }
+
+  // ---------- calendar ----------
+  function slotRanges(slot) {
+    const s = toMin(slot.start), e = toMin(slot.end);
+    if (e > s) return [{ day: slot.day, s, e }];
+    return [{ day: slot.day, s, e: 1440 }, { day: (slot.day + 1) % 7, s: 0, e }];
+  }
+
+  function renderCalendar() {
+    const cal = $('cal');
+    const today = liveStatus ? liveStatus.serverTime.day : new Date().getDay();
+    const activeId = liveStatus && liveStatus.currentSlot ? liveStatus.currentSlot.id : null;
+    let html = '<div class="cal-head"></div>' + COL_ORDER.map(d => `<div class="cal-head ${d === today ? 'today' : ''}">${DAYS[d].toUpperCase()}</div>`).join('');
+    html += '<div class="cal-hours">' + Array.from({ length: 24 }, (_, h) => `<div>${h ? String(h).padStart(2, '0') + ':00' : ''}</div>`).join('') + '</div>';
+    for (const d of COL_ORDER) {
+      html += `<div class="day-col ${d === today ? 'today' : ''}" data-day="${d}">`;
+      for (const slot of conf().slots) {
+        for (const r of slotRanges(slot)) {
+          if (r.day !== d) continue;
+          const pl = plById(slot.playlistId);
+          const top = r.s / 60, height = Math.max((r.e - r.s) / 60, 0.4);
+          html += `<div class="slot ${slot.type === 'live' ? 'live' : ''} ${slot.id === activeId ? 'active' : ''}" data-id="${esc(slot.id)}" style="top:calc(var(--hour) * ${top});height:calc(var(--hour) * ${height} - 2px)" title="${esc(slot.title)} ${esc(slot.start)} to ${esc(slot.end)}">
+            <div class="t">${esc(slot.title)}</div>
+            <div class="s">${esc(slot.start)} to ${esc(slot.end === '24:00' ? '00:00' : slot.end)}${slot.type === 'live' ? ' · LIVE' : pl ? ' · ' + esc(pl.name) : ''}</div>
+          </div>`;
+        }
+      }
+      if (d === today && liveStatus) html += `<div class="now-line" style="top:calc(var(--hour) * ${liveStatus.serverTime.min / 60})"></div>`;
+      html += '</div>';
+    }
+    cal.innerHTML = html;
+    cal.querySelectorAll('.slot').forEach(el => el.addEventListener('pointerdown', e => e.stopPropagation()));
+    cal.querySelectorAll('.slot').forEach(el => el.onclick = () => openSlot(conf().slots.find(s => s.id === el.dataset.id)));
+    cal.querySelectorAll('.day-col').forEach(col => bindDrag(col));
+  }
+
+  function bindDrag(col) {
+    col.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      const rect = col.getBoundingClientRect();
+      const hourPx = rect.height / 24;
+      const snap = (y) => Math.min(1440, Math.max(0, Math.round((y - rect.top) / hourPx * 60 / 15) * 15));
+      const startMin = Math.min(1425, Math.floor((e.clientY - rect.top) / hourPx * 60 / 15) * 15);
+      let endMin = startMin + 60;
+      const draft = document.createElement('div');
+      draft.className = 'slot draft';
+      col.appendChild(draft);
+      const paint = () => { const a = Math.min(startMin, endMin), b = Math.max(startMin, endMin); draft.style.top = `calc(var(--hour) * ${a / 60})`; draft.style.height = `calc(var(--hour) * ${(b - a) / 60} - 2px)`; draft.textContent = fromMin(a) + ' to ' + fromMin(b); };
+      paint();
+      let moved = false;
+      col.setPointerCapture(e.pointerId);
+      const move = (ev) => { const m = snap(ev.clientY); if (Math.abs(m - startMin) >= 15) { moved = true; endMin = m; paint(); } };
+      const up = () => {
+        col.removeEventListener('pointermove', move); col.removeEventListener('pointerup', up); col.removeEventListener('pointercancel', up);
+        draft.remove();
+        let a = Math.min(startMin, endMin), b = Math.max(startMin, endMin);
+        if (!moved) { a = startMin; b = Math.min(1440, startMin + 60); }
+        if (b - a < 15) b = a + 15;
+        openSlot(null, { day: +col.dataset.day, start: fromMin(a), end: fromMin(b === 1440 ? 0 : b) });
+      };
+      col.addEventListener('pointermove', move); col.addEventListener('pointerup', up); col.addEventListener('pointercancel', up);
+    });
+  }
+
+  // ---------- slot modal ----------
+  let editing = null, slotType = 'auto';
+  function setType(t) {
+    slotType = t;
+    $('typeSeg').querySelectorAll('button').forEach(b => { b.className = b.dataset.type === t ? 'on ' + t : ''; });
+    $('plField').style.display = t === 'auto' ? '' : 'none';
+    $('typeHint').textContent = t === 'auto'
+      ? 'The AutoDJ plays this playlist during the slot. If anyone goes live, the live show cuts in straight away and the AutoDJ picks up again when they stop.'
+      : 'Reserved for a live DJ. Until the DJ goes live, the fallback playlist keeps the stream going so there is no dead air.';
+  }
+  $('typeSeg').querySelectorAll('button').forEach(b => b.onclick = () => setType(b.dataset.type));
+
+  function openSlot(slot, preset) {
+    editing = slot || null;
+    const s = slot || Object.assign({ type: 'auto', title: '', playlistId: selectedPl, day: 1, start: '08:00', end: '12:00' }, preset || {});
+    $('slotModalTitle').textContent = slot ? 'Edit slot' : 'New slot';
+    $('fPlaylist').innerHTML = playlistOptions(s.playlistId || selectedPl, state.playlists.length ? null : 'Create a playlist first');
+    $('fTitle').value = s.title || '';
+    $('fStart').value = s.start;
+    $('fEnd').value = s.end === '24:00' ? '00:00' : s.end;
+    $('daysLabel').textContent = slot ? 'Day' : 'Days (pick several to repeat)';
+    $('fDays').innerHTML = COL_ORDER.map(d => `<label><input type="${slot ? 'radio' : 'checkbox'}" name="fday" value="${d}" ${d === s.day ? 'checked' : ''}><span>${DAYS[d]}</span></label>`).join('');
+    $('fDelete').hidden = !slot;
+    $('fErr').textContent = '';
+    setType(s.type);
+    $('slotModal').classList.add('open');
+  }
+  function closeSlot() { $('slotModal').classList.remove('open'); editing = null; }
+  $('fCancel').onclick = closeSlot;
+  $('slotModal').onclick = (e) => { if (e.target === $('slotModal')) closeSlot(); };
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSlot(); });
+  $('addSlotBtn').onclick = () => openSlot(null);
+
+  $('fSave').onclick = async () => {
+    const days = [...$('fDays').querySelectorAll('input:checked')].map(i => +i.value);
+    if (!days.length) return $('fErr').textContent = 'Pick at least one day';
+    const body = { type: slotType, playlistId: $('fPlaylist').value, title: $('fTitle').value.trim(), start: $('fStart').value, end: $('fEnd').value };
+    if (!body.start || !body.end) return $('fErr').textContent = 'Set a start and end time';
+    try {
+      if (editing) await api('PUT', `/api/autodj/channels/${encodeURIComponent(channelId)}/slots/${editing.id}`, Object.assign(body, { day: days[0] }));
+      else for (const d of days) await api('POST', `/api/autodj/channels/${encodeURIComponent(channelId)}/slots`, Object.assign({}, body, { day: d }));
+      closeSlot(); await load(); toast('Schedule saved');
+    } catch (err) { $('fErr').textContent = err.message; }
+  };
+  $('fDelete').onclick = async () => {
+    if (!editing || !confirm('Delete this slot?')) return;
+    await api('DELETE', `/api/autodj/channels/${encodeURIComponent(channelId)}/slots/${editing.id}`);
+    closeSlot(); await load(); toast('Slot deleted');
+  };
+
+  // ---------- channel controls ----------
+  $('enabled').onchange = async (e) => {
+    try { await api('PUT', `/api/autodj/channels/${encodeURIComponent(channelId)}`, { enabled: e.target.checked }); await load(); toast(e.target.checked ? 'AutoDJ on' : 'AutoDJ off'); }
+    catch (err) { toast(err.message); }
+  };
+  $('fallback').onchange = async (e) => {
+    await api('PUT', `/api/autodj/channels/${encodeURIComponent(channelId)}`, { fallbackPlaylistId: e.target.value || null }); await load(); toast('Fallback saved');
+  };
+  $('tz').onchange = async (e) => { try { await api('PUT', '/api/autodj/settings', { timezone: e.target.value }); await load(); toast('Timezone saved'); } catch (err) { toast(err.message); } };
+  $('skipBtn').onclick = async () => { await api('POST', `/api/autodj/channels/${encodeURIComponent(channelId)}/skip`); setTimeout(pollStatus, 300); };
+
+  // ---------- playlists ----------
+  function renderPlaylists() {
+    const sel = $('plSelect');
+    sel.innerHTML = state.playlists.length ? playlistOptions(selectedPl) : '<option>No playlists yet</option>';
+    sel.disabled = !state.playlists.length;
+    const pl = plById(selectedPl);
+    $('plRename').disabled = $('plDelete').disabled = $('plShuffle').disabled = !pl;
+    $('plShuffle').checked = !!(pl && pl.shuffle);
+    const tb = tracksById();
+    if (!pl) { $('plTracks').innerHTML = '<div class="empty">Make a playlist, then add tracks to it from the library with the + button.</div>'; $('plInfo').textContent = ''; return; }
+    const total = pl.trackIds.reduce((s, id) => s + (tb[id] ? tb[id].duration : 0), 0);
+    $('plInfo').textContent = `${pl.trackIds.length} tracks · ${fmt(total)}`;
+    const nowId = liveStatus && liveStatus.track ? liveStatus.track.id : null;
+    $('plTracks').innerHTML = pl.trackIds.length ? pl.trackIds.map((id, i) => {
+      const t = tb[id]; if (!t) return '';
+      return `<div class="row ${id === nowId ? 'playing' : ''}"><span class="num">${i + 1}</span><div class="info"><div class="ti">${esc(t.title)}</div><div class="ar">${esc(t.artist || '')}</div></div><span class="dur">${fmt(t.duration)}</span>
+        <button class="icon-btn" data-act="up" data-i="${i}" title="Move up">${ICON.up}</button>
+        <button class="icon-btn" data-act="down" data-i="${i}" title="Move down">${ICON.down}</button>
+        <button class="icon-btn danger" data-act="rm" data-i="${i}" title="Remove from playlist">${ICON.x}</button></div>`;
+    }).join('') : '<div class="empty">Empty. Add tracks from the library below with the + button.</div>';
+    $('plTracks').querySelectorAll('button').forEach(b => b.onclick = () => {
+      const ids = pl.trackIds.slice(), i = +b.dataset.i;
+      if (b.dataset.act === 'up' && i > 0) [ids[i - 1], ids[i]] = [ids[i], ids[i - 1]];
+      else if (b.dataset.act === 'down' && i < ids.length - 1) [ids[i + 1], ids[i]] = [ids[i], ids[i + 1]];
+      else if (b.dataset.act === 'rm') ids.splice(i, 1);
+      else return;
+      savePl({ trackIds: ids });
+    });
+  }
+  async function savePl(patch) {
+    const pl = plById(selectedPl); if (!pl) return;
+    Object.assign(pl, patch); renderPlaylists(); renderLibrary();
+    try { await api('PUT', '/api/autodj/playlists/' + pl.id, patch); await load(); } catch (e) { toast(e.message); load(); }
+  }
+  $('plSelect').onchange = (e) => { selectedPl = e.target.value; renderPlaylists(); renderLibrary(); };
+  $('plShuffle').onchange = (e) => savePl({ shuffle: e.target.checked });
+  $('newPlBtn').onclick = async () => {
+    const name = prompt('Playlist name', 'New playlist'); if (!name) return;
+    const r = await api('POST', '/api/autodj/playlists', { name }); selectedPl = r.playlist.id; await load(); toast('Playlist created');
+  };
+  $('plRename').onclick = () => { const pl = plById(selectedPl); if (!pl) return; const name = prompt('Rename playlist', pl.name); if (name) savePl({ name }); };
+  $('plDelete').onclick = async () => {
+    const pl = plById(selectedPl); if (!pl || !confirm(`Delete playlist "${pl.name}"? Schedule slots using it are removed too.`)) return;
+    await api('DELETE', '/api/autodj/playlists/' + pl.id); selectedPl = null; await load(); toast('Playlist deleted');
+  };
+
+  // ---------- library ----------
+  function renderLibrary() {
+    const q = $('search').value.trim().toLowerCase();
+    const pl = plById(selectedPl);
+    const inPl = new Set(pl ? pl.trackIds : []);
+    const list = state.tracks.filter(t => !q || (t.title + ' ' + t.artist + ' ' + t.originalName).toLowerCase().includes(q));
+    const total = state.tracks.reduce((s, t) => s + t.duration, 0);
+    const where = storage ? (storage.type === 'r2' ? 'R2 · ' : 'server disk · ') : '';
+    $('libCount').textContent = where + (state.tracks.length ? `${state.tracks.length} · ${fmt(total)}` : 'empty');
+    $('library').innerHTML = list.length ? list.map(t => `<div class="row" data-id="${t.id}">
+      <button class="icon-btn" data-act="play" title="Preview">${previewId === t.id ? ICON.stop : ICON.play}</button>
+      <div class="info"><div class="ti">${esc(t.title)}</div><div class="ar">${esc(t.artist || t.originalName)}</div></div>
+      <span class="dur">${fmt(t.duration)}</span>
+      <button class="icon-btn" data-act="add" title="${pl ? 'Add to ' + esc(pl.name) : 'Create a playlist first'}" ${pl ? '' : 'disabled'} style="${inPl.has(t.id) ? 'color:var(--amber)' : ''}">${ICON.plus}</button>
+      <button class="icon-btn" data-act="edit" title="Edit title / artist">${ICON.edit}</button>
+      <button class="icon-btn danger" data-act="del" title="Delete from library">${ICON.trash}</button>
+    </div>`).join('') : `<div class="empty">${state.tracks.length ? 'No matches.' : 'No music yet. Upload some tracks to get started.'}</div>`;
+    $('library').querySelectorAll('button').forEach(b => b.onclick = () => libAction(b.dataset.act, b.closest('.row').dataset.id));
+  }
+  $('search').oninput = renderLibrary;
+
+  async function libAction(act, id) {
+    const t = state.tracks.find(x => x.id === id); if (!t) return;
+    if (act === 'play') {
+      const a = $('preview');
+      if (previewId === id) { a.pause(); previewId = null; }
+      else { a.src = `/api/autodj/tracks/${id}/audio`; a.play().catch(() => {}); previewId = id; a.onended = () => { previewId = null; renderLibrary(); }; }
+      renderLibrary();
+    } else if (act === 'add') {
+      const pl = plById(selectedPl); if (!pl) return;
+      savePl({ trackIds: pl.trackIds.concat(id) }); toast(`Added to ${pl.name}`);
+    } else if (act === 'edit') {
+      const title = prompt('Title', t.title); if (title === null) return;
+      const artist = prompt('Artist', t.artist || ''); if (artist === null) return;
+      await api('PATCH', '/api/autodj/tracks/' + id, { title, artist }); await load();
+    } else if (act === 'del') {
+      if (!confirm(`Delete "${t.title}" from the library? It is removed from every playlist.`)) return;
+      await api('DELETE', '/api/autodj/tracks/' + id); await load(); toast('Track deleted');
+    }
+  }
+
+  // uploads, one at a time so the server only transcodes one file at once
+  const queue = []; let uploading = false;
+  function addFiles(files) {
+    for (const f of files) {
+      const el = document.createElement('div');
+      el.className = 'up-item';
+      el.innerHTML = `<span>${esc(f.name)}</span> <span class="st">waiting</span><div class="bar"><div></div></div>`;
+      $('uploads').appendChild(el);
+      queue.push({ f, el });
+    }
+    pump();
+  }
+  function pump() {
+    if (uploading || !queue.length) return;
+    uploading = true;
+    const { f, el } = queue.shift();
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', '/api/autodj/upload?name=' + encodeURIComponent(f.name));
+    xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+    xhr.upload.onprogress = (e) => { if (e.lengthComputable) { el.querySelector('.bar div').style.width = (e.loaded / e.total * 100) + '%'; el.querySelector('.st').textContent = Math.round(e.loaded / e.total * 100) + '%'; if (e.loaded === e.total) el.querySelector('.st').textContent = 'converting'; } };
+    xhr.onload = () => {
+      let r = {}; try { r = JSON.parse(xhr.responseText); } catch (e) {}
+      if (xhr.status === 403) { location.href = '/auth/login?redirect=/schedule'; return; }
+      if (xhr.status === 200 && r.ok) {
+        el.className = 'up-item done'; el.querySelector('.st').textContent = 'added';
+        const pl = plById(selectedPl);
+        if (pl && $('autoAdd') && $('autoAdd').checked) pl.trackIds.push(r.track.id);
+        setTimeout(() => el.remove(), 4000);
+      } else { el.className = 'up-item err'; el.querySelector('.st').textContent = r.error || 'failed'; }
+      uploading = false; load(); pump();
+    };
+    xhr.onerror = () => { el.className = 'up-item err'; el.querySelector('.st').textContent = 'network error'; uploading = false; pump(); };
+    xhr.send(f);
+  }
+  const drop = $('drop');
+  drop.onclick = () => $('fileInput').click();
+  $('fileInput').onchange = (e) => { addFiles(e.target.files); e.target.value = ''; };
+  drop.ondragover = (e) => { e.preventDefault(); drop.classList.add('over'); };
+  drop.ondragleave = () => drop.classList.remove('over');
+  drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove('over'); addFiles([...e.dataTransfer.files].filter(f => /^audio\//.test(f.type) || /\.(mp3|wav|flac|m4a|aac|ogg|aiff?)$/i.test(f.name))); };
+
+  // ---------- live status ----------
+  function renderStatus(s) {
+    liveStatus = s;
+    const m = $('mode');
+    const labels = { live: ['LIVE', 'DJ on air'], auto: ['AUTO', 'AutoDJ playing'], relay: ['RELAY', 'stream relay'], off: ['OFF', 'off air'] };
+    m.className = 'mode ' + s.mode;
+    m.innerHTML = labels[s.mode][0] + '<small>' + labels[s.mode][1] + '</small>';
+    if (s.mode === 'auto' && s.track) {
+      $('npTitle').textContent = s.track.title;
+      $('npSub').textContent = s.track.artist || ' ';
+      $('npBar').style.width = Math.min(100, s.track.position / s.track.duration * 100) + '%';
+      $('npPos').textContent = fmt(s.track.position); $('npDur').textContent = fmt(s.track.duration);
+    } else {
+      $('npTitle').textContent = s.mode === 'live' ? 'Live show on air' : s.mode === 'relay' ? 'Relaying external stream' : 'Nothing playing';
+      $('npSub').textContent = s.mode === 'live' ? 'AutoDJ is paused and resumes when the DJ goes off air.' : s.enabled ? 'No slot or fallback playlist with tracks right now.' : 'AutoDJ is off for this channel.';
+      $('npBar').style.width = '0'; $('npPos').textContent = $('npDur').textContent = '0:00';
+    }
+    $('skipBtn').disabled = s.mode !== 'auto';
+    $('metaSlot').textContent = s.currentSlot ? `${s.currentSlot.title} (${s.currentSlot.start} to ${s.currentSlot.end === '24:00' ? '00:00' : s.currentSlot.end})` : 'none';
+    $('metaPl').textContent = s.playlist ? s.playlist.name + (s.usingFallback ? ' (fallback)' : '') : 'none';
+    const n = s.upNext[0];
+    $('metaNext').textContent = n ? `${n.title}, ${DAYS[n.day]} ${n.start} (in ${n.inMinutes >= 60 ? Math.floor(n.inMinutes / 60) + 'h ' : ''}${n.inMinutes % 60}m)` : 'nothing scheduled';
+    $('metaListeners').textContent = s.listeners;
+    $('metaTime').textContent = `${DAYS[s.serverTime.day]} ${fromMin(s.serverTime.min)}`;
+    const warn = $('warn');
+    const c = conf();
+    const st = storage || {};
+    if (st.error) { warn.hidden = false; warn.textContent = 'Storage problem: ' + st.error; }
+    else if (st.type === 'r2' && st.onDisk < st.tracks) { warn.hidden = false; warn.textContent = `Fetching music from R2 after a restart: ${st.onDisk} of ${st.tracks} tracks ready. Tracks play as soon as they arrive.`; }
+    else if (st.type === 'local' && st.isCloud) { warn.hidden = false; warn.textContent = 'Music is only on the server disk and is wiped when Render restarts or redeploys. Add the R2 settings to keep it.'; }
+    else if (!c.enabled && (c.slots.length || c.fallbackPlaylistId)) { warn.hidden = false; warn.textContent = 'The schedule is set up but the AutoDJ switch (top right) is off, so nothing will play automatically.'; }
+    else if (c.enabled && !c.fallbackPlaylistId) { warn.hidden = false; warn.textContent = 'No fallback playlist: outside your slots the stream goes silent. Pick one under the schedule to keep music going 24/7.'; }
+    else warn.hidden = true;
+    $('history').innerHTML = s.history.length ? s.history.map(h => `<div class="row"><time>${new Date(h.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time><div class="info"><div class="ti">${esc(h.title)}</div><div class="ar">${esc(h.artist || '')}</div></div></div>`).join('') : '<div class="empty">Nothing yet.</div>';
+  }
+
+  let lastSlotSig = '';
+  async function pollStatus() {
+    try {
+      const all = await api('GET', '/api/autodj/status');
+      if (all._storage) storage = all._storage;
+      const s = all[channelId]; if (!s) return;
+      const prevTrack = liveStatus && liveStatus.track ? liveStatus.track.id : null;
+      renderStatus(s);
+      const sig = (s.currentSlot ? s.currentSlot.id : '') + '|' + s.serverTime.min + '|' + s.serverTime.day;
+      if (sig !== lastSlotSig) { lastSlotSig = sig; renderCalendar(); }
+      if ((s.track ? s.track.id : null) !== prevTrack) renderPlaylists();
+    } catch (e) {}
+  }
+
+  load().then(() => {
+    pollStatus();
+    const now = new Date();
+    $('calScroll').scrollTop = Math.max(0, (now.getHours() - 2) * 30);
+  }).catch(e => { if (e.message !== 'auth') toast(e.message); });
+  setInterval(pollStatus, 2000);
+})();
+</script>
+</body>
+</html>

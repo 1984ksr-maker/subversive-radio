@@ -208,6 +208,7 @@ function createChannel(id, name) {
 function startServerRadio(ch) {
   if (!ch.serverRadioUrl || ch.serverRadioProcess) return;
   if (ch.broadcasterSocketId) return; // broadcaster is live, don't start
+  if (autodj && autodj.claims(ch)) return; // AutoDJ schedule has priority over the relay
   const url = ch.serverRadioUrl;
   const rate = ch.stationInfo.sampleRate || 44100;
 
@@ -272,6 +273,27 @@ function stopServerRadio(ch) {
   ch.stationInfo.serverRadio = false;
   try { proc.kill('SIGKILL'); } catch(e) {}
 }
+
+// ========== AUTODJ / SCHEDULER (see autodj.js) ==========
+// Plays scheduled playlists whenever nobody is live; going live always cuts it.
+const { createAutoDJ } = require('./autodj');
+const autodj = createAutoDJ({
+  io,
+  channels,
+  getChannel: (id) => getChannel(id),
+  stopServerRadio: (ch) => stopServerRadio(ch),
+  startServerRadio: (ch) => startServerRadio(ch),
+  // AutoDJ sends ready-made MP3 frames straight to /stream listeners
+  writeMp3: (ch, buf) => {
+    for (const res of ch.streamClients) {
+      if (res.writableLength > 2 * 1024 * 1024) { res.destroy(); ch.streamClients.delete(res); continue; }
+      try { res.write(buf); } catch (e) { ch.streamClients.delete(res); }
+    }
+  },
+  dataDir: process.env.AUTODJ_DIR || path.join(__dirname, 'autodj-data'),
+  r2: require('./r2').createR2(),   // set R2_* env vars to keep the music library in Cloudflare R2
+  isCloud: IS_CLOUD
+});
 
 // Create default channel, then load saved channels on top
 createChannel('main', 'SUBVERSIVE RADIO');
@@ -572,6 +594,13 @@ app.delete('/api/server-radio/:channel?', (req, res) => {
     flushChannelStreamClients(ch);
   }
   res.json({ ok: true });
+});
+
+// ========== AUTODJ API + SCHEDULE DASHBOARD ==========
+autodj.mountRoutes(app, isAdmin, express);
+app.get('/schedule', (req, res) => {
+  if (!isAdmin(req)) return res.redirect('/auth/login?redirect=/schedule');
+  res.sendFile(path.join(__dirname, 'schedule.html'));
 });
 
 // ========== PROTECTED PAGES ==========
@@ -1059,6 +1088,7 @@ io.on('connection', (socket) => {
     const ch = myChannel();
     if (!ch) return;
     stopServerRadio(ch);
+    autodj.onLiveStart(ch); // live always cuts the AutoDJ
     ch.stationInfo.isLive = true;
     ch.stationInfo.serverRadio = false;
     if (info) {
@@ -1076,8 +1106,10 @@ io.on('connection', (socket) => {
     if (!ch) return;
     ch.stationInfo.isLive = false;
     ch.stationInfo.currentTransmission = null;
-    io.to('listeners-' + myChannelId).emit('station-offline');
+    // if the AutoDJ takes over, keep listeners tuned in instead of sending them off air
+    if (!autodj.claims(ch)) io.to('listeners-' + myChannelId).emit('station-offline');
     flushChannelStreamClients(ch);
+    autodj.onLiveEnd(ch);
     console.log(`⭕ [${myChannelId}] Station offline`);
     // Resume server radio if configured
     if (ch.serverRadioUrl) {
@@ -1187,8 +1219,9 @@ io.on('connection', (socket) => {
       ch.stationInfo.isLive = false;
       ch.stationInfo.currentTransmission = null;
       ch.broadcasterSocketId = null;
-      io.to('listeners-' + myChannelId).emit('station-offline');
+      if (!autodj.claims(ch)) io.to('listeners-' + myChannelId).emit('station-offline');
       flushChannelStreamClients(ch);
+      autodj.onLiveEnd(ch);
       console.log(`🎙️  Broadcaster disconnected from [${myChannelId}]`);
       // Resume server radio if configured
       if (ch.serverRadioUrl) {

@@ -686,6 +686,18 @@
         setLiveState();
       });
 
+      // AutoDJ: show the current track under the station name
+      function showNowPlaying(np) {
+        if (!np || !np.title) return;
+        document.getElementById('stationTagline').textContent = 'AutoDJ: ' + (np.artist ? np.artist + ' / ' : '') + np.title;
+        if ('mediaSession' in navigator && isListening) {
+          try { navigator.mediaSession.metadata = new MediaMetadata({ title: np.title, artist: np.artist || 'Subversive Radio AutoDJ', album: 'Subversive Radio' }); } catch (e) {}
+        }
+      }
+      socket.on('now-playing', showNowPlaying);
+      socket.on('station-info', (info) => { if (info && info.autoDJ) showNowPlaying(info.nowPlaying); });
+      socket.on('station-live', (info) => { if (info && info.autoDJ) showNowPlaying(info.nowPlaying); });
+
       socket.on('station-offline', () => {
         document.getElementById('badge').textContent = 'OFF AIR';
         document.getElementById('badge').className = 'station-badge';
